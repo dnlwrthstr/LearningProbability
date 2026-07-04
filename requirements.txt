@@ -1,0 +1,9 @@
+# Core libraries for running the notebooks
+jupyter
+numpy
+pandas
+matplotlib
+sympy
+
+# Optional: transcribing course videos to text (Apple Silicon macOS)
+# mlx-whisper
