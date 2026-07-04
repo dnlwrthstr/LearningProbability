@@ -27,3 +27,7 @@ When transcribing a video, the goal is not a verbatim transcript — restructure
 ## Environment
 
 Python 3 with Jupyter. Run notebooks with `jupyter notebook`.
+
+## Git
+
+Notebook outputs are stripped on commit via an nbstripout git filter (`.gitattributes` + local git config). In a fresh clone the filter must be re-registered once with `nbstripout --install --attributes .gitattributes`. Never commit notebooks with outputs; local working copies may keep them.

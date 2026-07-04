@@ -21,6 +21,12 @@ You need a Python 3 environment. Install the dependencies:
 pip install -r requirements.txt
 ```
 
+Notebook outputs are stripped automatically on commit. After cloning, register the git filter once:
+
+```bash
+nbstripout --install --attributes .gitattributes
+```
+
 Start the Jupyter Notebook server:
 
 ```bash
