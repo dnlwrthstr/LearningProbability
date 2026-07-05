@@ -28,6 +28,8 @@ When transcribing a video, the goal is not a verbatim transcript — restructure
 
 Python 3 with Jupyter. Run notebooks with `jupyter notebook`.
 
+Two Python environments touch the notebooks: Anaconda (numpy 1.x) executes them during authoring, and the user's PyCharm virtualenv (numpy 2.x) runs them interactively. Write numpy code that works in both — e.g. use `np.trapezoid` with the numpy<2 fallback shim `if not hasattr(np, "trapezoid"): np.trapezoid = np.trapz` in the imports cell, and avoid APIs removed in numpy 2.0 (`np.trapz`, `np.in1d`, `np.row_stack`).
+
 ## Git
 
 Notebook outputs are stripped on commit via an nbstripout git filter (`.gitattributes` + local git config). In a fresh clone the filter must be re-registered once with `nbstripout --install --attributes .gitattributes`. Never commit notebooks with outputs; local working copies may keep them.
