@@ -5,6 +5,7 @@ pandas
 matplotlib
 sympy
 nbstripout
+nltk
 
 # Optional: transcribing course videos to text (Apple Silicon macOS)
 # mlx-whisper

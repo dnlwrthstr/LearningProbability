@@ -121,6 +121,8 @@ x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
 $$
 ```
 
+Currency dollar signs: never write a literal `$` (or `\$`, or `&#36;`) in markdown prose — PyCharm's renderer pairs it with the next math `$` and swallows the text between as LaTeX. Write amounts as code spans (`` `$1` ``, `` `$22,000` ``), and keep the `$` symbol out of LaTeX formulas entirely (write `= 5`, not `= \$5`; the surrounding prose carries the currency).
+
 ---
 
 ## Code Rules

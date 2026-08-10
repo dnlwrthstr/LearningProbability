@@ -16,3 +16,6 @@ venv/
 
 # Course videos (transcribed locally, never committed)
 coursera/videos/
+
+# Rideshare lab data (166MB/79MB — exceeds GitHub file limits, kept local only)
+coursera/labs/Rideshare_Project_Week1/data/
