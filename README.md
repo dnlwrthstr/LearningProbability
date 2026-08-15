@@ -12,6 +12,9 @@ More courses and topics will be added over time.
 
 ### Root Files
 - `GUIDELINES.md`: The specification every notebook follows (structure, teaching style, code and visualization standards).
+- [`FORMULAS.md`](./FORMULAS.md): Course-wide formula and notation reference — every formula from the notebooks in one place, with critical-value tables, a "which test do I use" guide, and a scipy/numpy cookbook.
+- [`PYTHON.md`](./PYTHON.md): The implementation companion — how each formula is actually computed in the notebooks, using numpy/sympy/stdlib only (no scipy), plus the recurring simulation, enumeration and plotting idioms.
+- `FORMULAS.pdf` / `FORMULAS-notes.pdf` / `PYTHON.pdf`: Printable typeset versions of the two references — `FORMULAS.pdf` with even margins (15 pages), `FORMULAS-notes.pdf` with a 5 cm blank outer column for handwritten annotation on a tablet (16 pages), and `PYTHON.pdf` (14 pages). Rebuild all three after editing either Markdown file with `./build_pdfs.sh` (needs `pandoc` and a LaTeX install providing `xelatex`).
 
 ## Getting Started
 
