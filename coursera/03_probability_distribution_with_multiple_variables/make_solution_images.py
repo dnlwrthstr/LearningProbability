@@ -203,6 +203,290 @@ def wrap(text, width=48):
     return textwrap.wrap(text, width)
 
 
+def trapezoid(values, grid_points, axis=-1):
+    """np.trapezoid with the numpy<2 fallback."""
+    integrate = getattr(np, "trapezoid", None) or np.trapz
+    return integrate(values, grid_points, axis=axis)
+
+
+def density_image(fig, ax, values, title, vmax, extent=(0, 1, 0, 1), label="density"):
+    image = ax.imshow(values.T, origin="lower", extent=extent, cmap=SEQ, vmin=0, vmax=vmax,
+                      aspect="equal")
+    colorbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+    colorbar.set_label(label)
+    colorbar.outline.set_visible(False)
+    ax.set_title(title)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    return image
+
+
+# ================================================================ notebook 03 (correct originals, restyled)
+def fig_03_ex3():
+    grid_1d = np.linspace(0, 1, 1001)
+    xg, yg = np.meshgrid(grid_1d, grid_1d, indexing="ij")
+    volume = trapezoid(trapezoid(xg * yg, grid_1d, axis=1), grid_1d)
+    c = 1 / volume
+    corner = np.where((xg <= 0.5) & (yg <= 0.5), c * xg * yg, 0)
+    p_corner = trapezoid(trapezoid(corner, grid_1d, axis=1), grid_1d)
+    assert abs(c - 4) < 1e-6 and abs(p_corner - 1 / 16) < 2e-3
+
+    fig = new_figure("Exercise 3: normalizing f(x, y) = c·xy on the unit square",
+                     "Find c so the total volume is 1, then compute P(X ≤ ½, Y ≤ ½). Is it ¼?")
+    gs = grid(fig, wspace=0.32)
+
+    ax = fig.add_subplot(gs[0, 0])
+    density_image(fig, ax, c * xg * yg, "Normalized density f(x, y) = 4xy", vmax=4)
+    ax.add_patch(Rectangle((0, 0), 0.5, 0.5, fill=False, edgecolor=ORANGE, linewidth=3))
+    ax.text(0.25, 0.25, "X ≤ ½, Y ≤ ½", ha="center", va="center", fontsize=10.5, weight="bold",
+            color=INK, bbox=dict(facecolor="white", edgecolor=ORANGE, boxstyle="round,pad=0.3"))
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+
+    ax = fig.add_subplot(gs[0, 1])
+    for y_fixed, color in [(1.0, BLUE), (0.5, ORANGE), (0.25, AQUA)]:
+        ax.plot(grid_1d, c * grid_1d * y_fixed, color=color, linewidth=2, label=f"y = {y_fixed:g}")
+    ax.set_title("Cross-sections: f(x, y) for fixed y")
+    ax.set_xlabel("x")
+    ax.set_ylabel("f(x, y)")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 4.2)
+    ax.grid(True)
+    ax.legend(loc="upper left", fontsize=10)
+
+    panel(fig.add_subplot(gs[0, 2]), "Step 1: find c", [
+        r"$\int_0^1 \int_0^1 xy\ dx\,dy = \int_0^1 \dfrac{y}{2}\ dy = \dfrac{1}{4}$",
+        "",
+        "",
+        r"$c \cdot \dfrac{1}{4} = 1 \quad \Rightarrow \quad c = 4$",
+        "",
+        "",
+        r"So $f_{XY}(x, y) = 4xy$ for $0 \leq x, y \leq 1$.",
+    ], spacing=0.1)
+
+    ax = fig.add_subplot(gs[1, 0])
+    bars(ax, ["share of area", "probability"], [0.25, p_corner],
+         "Corner X ≤ ½, Y ≤ ½", "", ylim=0.35, label_fmt=lambda v: frac_label(v, 16), highlight=1)
+
+    panel(fig.add_subplot(gs[1, 1]), "Step 2: the corner", [
+        r"$P(X \leq \frac{1}{2},\ Y \leq \frac{1}{2}) = \int_0^{1/2}\!\int_0^{1/2} 4xy\ dx\,dy$",
+        "",
+        r"$= 4 \cdot \dfrac{(1/2)^2}{2} \cdot \dfrac{(1/2)^2}{2} = \dfrac{1}{16}$",
+        "",
+        "",
+        "Numerical check (trapezoid rule):",
+        f"`integral of xy = {volume:.4f}  ->  c = {c:.1f}`",
+        f"`P(corner)      = {p_corner:.4f}  (exact 0.0625)`",
+    ], spacing=0.095)
+
+    panel(fig.add_subplot(gs[1, 2]), "Why not ¼?", [
+        "The corner covers ¼ of the area, but the",
+        "density is lowest there: it rises toward",
+        "(1, 1). Low density over ¼ of the area",
+        "holds only 1/16 of the volume.",
+        "",
+        "Only a flat (uniform) density turns",
+        "share of area into probability.",
+    ], spacing=0.09)
+    save(fig, "03_ex3_normalizing.png")
+
+
+def fig_03_ex6(big_wait, big_rate):
+    rng = np.random.default_rng(5)
+    x_pos = np.clip(rng.normal(5, 2.6, 100_000), 0, 10)
+    y_pos = np.clip(0.8 * x_pos + rng.normal(1, 1.4, 100_000), 0, 10)
+    datasets = [("Call center", big_wait, big_rate, "X = waiting time", "Y = rating"),
+                ("Constructed: Y = 0.8X + noise", x_pos, y_pos, "X", "Y")]
+
+    def cov_corr(x, y):
+        cov = np.mean((x - x.mean()) * (y - y.mean()))
+        return cov, cov / (x.std() * y.std())
+
+    stats = [cov_corr(x, y) for _, x, y, _, _ in datasets]
+
+    fig = new_figure("Exercise 6: positive vs negative dependence",
+                     "The direction of the high-density ridge shows the sign of the relationship between X and Y.")
+    gs = grid(fig, wspace=0.32)
+    sample = np.random.default_rng(0).choice(100_000, size=4000, replace=False)
+    for col, (name, x, y, xlabel, ylabel) in enumerate(datasets):
+        density, _, _ = np.histogram2d(x, y, bins=40, range=[[0, 10], [0, 10]], density=True)
+        ax = fig.add_subplot(gs[0, col])
+        density_image(fig, ax, density, f"{name}: joint density", vmax=np.percentile(density, 99),
+                      extent=(0, 10, 0, 10), label="density (capped at 99th pct)")
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+        ax = fig.add_subplot(gs[1, col])
+        ax.scatter(x[sample], y[sample], s=5, color=BLUE, alpha=0.3, linewidths=0)
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 10)
+        ax.set_aspect("equal")
+        ax.grid(True)
+        ax.set_title(f"{name}: 4,000 sampled points", fontsize=12)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+    panel(fig.add_subplot(gs[0, 2]), "Reading the ridges", [
+        "Call center: the mass sits top-left and",
+        "bottom-right. Long waits go with low",
+        "ratings → negative relationship.",
+        "",
+        "Constructed: the ridge rises from",
+        "bottom-left to top-right. Large X goes",
+        "with large Y → positive relationship.",
+    ], spacing=0.095)
+    panel(fig.add_subplot(gs[1, 2]), "Preview: covariance", [
+        "Computed from all 100,000 points:",
+        "",
+        f"Call center:   Cov = {stats[0][0]:.2f},  corr = {stats[0][1]:.2f}",
+        f"Constructed:  Cov = {stats[1][0]:.2f},  corr = {stats[1][1]:.2f}",
+        "",
+        "Downward ridge → Cov < 0.",
+        "Upward ridge → Cov > 0.",
+        "Covariance puts a number on this next.",
+    ], spacing=0.09)
+    save(fig, "03_ex6_joint_distribution_neg_pos.png")
+
+
+# ================================================================ notebook 04 (correct originals, restyled)
+def fig_04_ex3():
+    counts = np.zeros((6, 6))
+    for a in FACES:
+        for b in FACES:
+            counts[max(a, b) - 1, a - 1] += 1
+    marginal = counts.sum(axis=1) / 36
+    formula = np.array([(2 * m - 1) / 36 for m in FACES])
+    assert np.allclose(marginal, formula)
+    labels = [[f"{int(v)}/36" if v else "0" for v in row] for row in counts]
+
+    fig = new_figure("Exercise 3: joint of the first die and the maximum",
+                     "A = first die, M = max(A, B) of two fair dice. Sum each row to get the marginal of M.")
+    gs = grid(fig)
+    heat(fig.add_subplot(gs[0, :2]), counts / 36, FACES, FACES, "Joint P(M = m, A = a)",
+         "M = maximum", "A = first die", labels=labels, vmax=6 / 36 * 1.2)
+    panel(fig.add_subplot(gs[0, 2]), "Reading the table", [
+        "If a < m, the second die must show m:",
+        "1 outcome → 1/36.",
+        "",
+        "If a = m, the second die can be 1, …, m:",
+        "m outcomes → m/36 (the diagonal).",
+        "",
+        "If a > m: impossible, since the maximum",
+        "is at least the first die → 0.",
+    ], spacing=0.095)
+    grouped_bars(fig.add_subplot(gs[1, :2]), FACES,
+                 [("from the table (row sums)", marginal, BLUE), ("formula (2m − 1)/36", formula, ORANGE)],
+                 "Marginal P(M = m): table vs formula", "M = maximum", ylim=0.4,
+                 label_fmt=lambda v: f"{round(v * 36)}/36")
+    panel(fig.add_subplot(gs[1, 2]), "The direct formula", [
+        "M ≤ m means both dice are at most m:",
+        r"$P(M \leq m) = \dfrac{m^2}{36}$",
+        "",
+        "",
+        r"$P(M = m) = \dfrac{m^2 - (m-1)^2}{36} = \dfrac{2m - 1}{36}$",
+        "",
+        "",
+        "Row sums 1, 3, 5, 7, 9, 11 (in 36ths)",
+        "match the formula, and they add up to 36.",
+    ], spacing=0.085)
+    save(fig, "04_ex3_marginal_distribution.png")
+
+
+def fig_04_ex4():
+    grid_1d = np.linspace(0, 1, 501)
+    xg, yg = np.meshgrid(grid_1d, grid_1d, indexing="ij")
+    cases = [("Uniform f = 1", np.ones_like(xg)), ("f = 4xy", 4 * xg * yg)]
+    marginals = {name: (trapezoid(f, grid_1d, axis=1), trapezoid(f, grid_1d, axis=0)) for name, f in cases}
+    checks = {name: [fx[i] for i in (125, 250, 375)] for name, (fx, _) in marginals.items()}
+    assert np.allclose(checks["f = 4xy"], [0.5, 1.0, 1.5], atol=1e-3)
+
+    fig = new_figure("Exercise 4: marginals of a joint density on the unit square",
+                     "Integrate out one variable to get each marginal, then check whether the joint factors.")
+    gs = grid(fig, wspace=0.32)
+    for col, (name, f) in enumerate(cases):
+        ax = fig.add_subplot(gs[0, col])
+        density_image(fig, ax, f, f"{name}: joint density", vmax=4)
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+
+        fx, fy = marginals[name]
+        ax = fig.add_subplot(gs[1, col])
+        ax.plot(grid_1d, fx, color=BLUE, linewidth=2.5, label=r"$f_X(x)$")
+        ax.plot(grid_1d, fy, color=ORANGE, linewidth=2, linestyle="--", label=r"$f_Y(y)$")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 2.2)
+        ax.grid(True)
+        ax.set_xlabel("x (or y)")
+        ax.set_ylabel("marginal density")
+        ax.set_title(f"{name}: marginals " + ("(both flat at 1)" if col == 0 else "(both 2x)"))
+        ax.legend(loc="upper left", fontsize=10)
+
+    panel(fig.add_subplot(gs[0, 2]), "Integrate out the other variable", [
+        r"Uniform:  $f_X(x) = \int_0^1 1\ dy = 1$",
+        "",
+        r"4xy:  $f_X(x) = \int_0^1 4xy\ dy = 2x$",
+        "",
+        r"          $f_Y(y) = \int_0^1 4xy\ dx = 2y$",
+        "",
+        "",
+        "Numerical marginal f_X at x = 0.25, 0.5, 0.75:",
+        "`uniform: " + ", ".join(f"{v:.3f}" for v in checks["Uniform f = 1"]) + "`",
+        "`4xy:     " + ", ".join(f"{v:.3f}" for v in checks["f = 4xy"]) + "`",
+    ], spacing=0.1)
+    panel(fig.add_subplot(gs[1, 2]), "Independent?", [
+        r"Uniform:  $f_X(x)\,f_Y(y) = 1 \cdot 1 = 1 = f_{XY}$",
+        "",
+        r"4xy:  $f_X(x)\,f_Y(y) = 2x \cdot 2y = 4xy = f_{XY}$",
+        "",
+        "Both joints factor into their marginals,",
+        "so in both cases X and Y are independent,",
+        "even though 4xy is far from flat.",
+    ], spacing=0.1)
+    save(fig, "04_ex4_marginals_unit_squares.png")
+
+
+def fig_04_ex6():
+    joint3 = np.full((6, 6, 6), 1 / 216)
+    two_dice = joint3.sum(axis=2)
+    one_die = two_dice.sum(axis=1)
+    assert np.allclose(two_dice, 1 / 36) and np.allclose(one_die, 1 / 6)
+
+    fig = new_figure("Exercise 6: marginalizing a three-variable joint",
+                     "Three fair dice: sum out X₃, then X₂, one variable at a time.")
+    gs = grid(fig, wspace=0.32)
+    heat(fig.add_subplot(gs[0, 0]), joint3[:, :, 0], FACES, FACES,
+         "One layer of P(X₁, X₂, X₃): 1/216", "X₁", "X₂", labels=[["1/216"] * 6] * 6,
+         vmax=1 / 216 * 2.5, fontsize=9)
+    heat(fig.add_subplot(gs[0, 1]), two_dice, FACES, FACES, "Sum over X₃: P(X₁, X₂) = 1/36",
+         "X₁", "X₂", labels=[[frac_label(v) for v in row] for row in two_dice], vmax=1 / 36 * 2.5)
+    bars(fig.add_subplot(gs[0, 2]), FACES, one_die, "Sum over X₂: P(X₁) = 1/6", "X₁", ylim=0.25)
+
+    panel(fig.add_subplot(gs[1, :2]), "Step by step", [
+        r"The joint is a 6 × 6 × 6 cube: six layers ($X_3$ = 1, …, 6) like the left table, every cell 1/216.",
+        "",
+        r"Sum out $X_3$:  $P(x_1, x_2) = \sum_{x_3=1}^{6} \dfrac{1}{216} = \dfrac{6}{216} = \dfrac{1}{36}$",
+        "",
+        "",
+        "",
+        r"Sum out $X_2$:  $P(x_1) = \sum_{x_2=1}^{6} \dfrac{1}{36} = \dfrac{1}{6}$",
+        "",
+        "",
+        "",
+        "`shape (6, 6, 6)  --sum axis 2-->  (6, 6)  --sum axis 1-->  (6,)`",
+        f"`all cells 1/36? {np.allclose(two_dice, 1 / 36)}     P(X1) = 1/6 each? {np.allclose(one_die, 1 / 6)}`",
+    ], spacing=0.075)
+    panel(fig.add_subplot(gs[1, 2]), "Key takeaways", [
+        "To remove a variable, sum its",
+        "probabilities over all its values.",
+        "",
+        "Each sum removes one dimension.",
+        "",
+        "Chaining sums walks a joint down to",
+        "any subset of its variables, in any order.",
+    ], spacing=0.09)
+    save(fig, "04_ex6_3_variable_joint.png")
+
+
 # ================================================================ notebook 03
 def fig_03_ex4(big_wait, big_rate):
     rng = np.random.default_rng(0)
@@ -592,9 +876,14 @@ def fig_05_ex5():
 
 if __name__ == "__main__":
     wait, rate = load_call_center()
+    fig_03_ex3()
     fig_03_ex4(wait, rate)
     fig_03_ex5(wait, rate)
+    fig_03_ex6(wait, rate)
+    fig_04_ex3()
+    fig_04_ex4()
     fig_04_ex5()
+    fig_04_ex6()
     fig_05_ex1()
     fig_05_ex2()
     fig_05_ex3()
