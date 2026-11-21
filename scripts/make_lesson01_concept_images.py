@@ -64,6 +64,442 @@ def bracket(ax, x, y0, y1, text, color=ORANGE, side="right"):
             fontsize=10.5, color=color, weight="bold")
 
 
+# ================================================================ notebook 01
+def sheet_01_random_variables():
+    rng = np.random.default_rng(seed=42)
+    flips = rng.integers(0, 2, size=10)
+    x = rng.integers(0, 2, size=(500, 10)).sum(axis=1)
+    custom = rng.choice([1, -7, 3.14159], size=10, p=[0.5, 0.2, 0.3])
+    waits = rng.uniform(0, 10, size=5_000)
+    geometric = rng.geometric(p=0.5, size=100_000)
+    counts = np.bincount(x, minlength=11)
+    _, exact = binomial_pmf(10, 0.5)
+    assert flips.tolist() == [0, 1, 1, 0, 0, 1, 0, 1, 0, 0]
+    assert x[:12].tolist() == [8, 6, 5, 6, 4, 4, 4, 6, 5, 7, 4, 7] and counts.argmax() == 5
+    assert f"{(x == 9).mean():.4f}" == "0.0060" and f"{10 * 0.5 ** 10:.4f}" == "0.0098"
+
+    fig = new_figure("A random variable attaches a number to an uncertain outcome",
+                     "X = number of heads. Each run of the experiment gives a new value; "
+                     "P(X = k) groups every outcome that lands on the same number.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, 0])
+    for i, f in enumerate(flips):
+        ax.add_patch(Rectangle((i + 0.06, 1.1), 0.88, 0.88, facecolor=BLUE if f else BLUE_LIGHT,
+                               edgecolor=SURFACE, linewidth=2))
+        ax.text(i + 0.5, 1.54, "H" if f else "T", ha="center", va="center", fontsize=13, weight="bold",
+                color="white" if f else INK)
+        ax.annotate("", (i + 0.5, 0.78), (i + 0.5, 1.08), arrowprops=dict(arrowstyle="->", color=MUTED))
+        ax.text(i + 0.5, 0.55, str(f), ha="center", va="center", fontsize=13, color=ORANGE, weight="bold")
+        ax.text(i + 0.5, -0.25, "3", ha="center", va="center", fontsize=13, color=INK2)
+    ax.text(-0.15, 1.54, "outcome", ha="right", va="center", fontsize=10.5, color=INK2)
+    ax.text(-0.15, 0.55, "X", ha="right", va="center", fontsize=12, color=ORANGE, weight="bold")
+    ax.text(-0.15, -0.25, "x = 3", ha="right", va="center", fontsize=10.5, color=INK2)
+    ax.text(5, 0.12, "a deterministic variable, for contrast: always 3", ha="center", fontsize=10,
+            color=MUTED, style="italic")
+    ax.set_xlim(-1.6, 10.1)
+    ax.set_ylim(-0.55, 2.1)
+    ax.axis("off")
+    ax.set_title("Ten one-flip experiments: H → 1, T → 0")
+
+    ax = fig.add_subplot(gs[0, 1])
+    for row in range(10):
+        for col in range(10):
+            tail = col == row
+            ax.add_patch(Rectangle((col, row), 0.92, 0.88, facecolor=ORANGE if tail else BLUE_LIGHT,
+                                   edgecolor="none"))
+            ax.text(col + 0.46, row + 0.44, "T" if tail else "H", ha="center", va="center", fontsize=8.5,
+                    color="white" if tail else INK)
+    ax.set_xlim(0, 10)
+    ax.set_ylim(10, 0)
+    ax.set_xticks(np.arange(10) + 0.46, range(1, 11), fontsize=9)
+    ax.set_yticks([])
+    ax.tick_params(length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_xlabel("toss")
+    ax.set_title("X = 9 groups 10 sequences: P = 10/1024")
+
+    panel(fig.add_subplot(gs[0, 2]), "Random vs. deterministic", [
+        "Algebra: x = 3, fixed forever.",
+        "Random variable: tied to an uncertain outcome,",
+        "a different value on each run.",
+        "",
+        r"One sequence of 10 tosses: $(1/2)^{10}$",
+        "P(X = 9) adds up all sequences with nine",
+        f"heads: 10 × 1/1024 = {10 * 0.5 ** 10:.4f}",
+        "",
+        "Any values work if the probabilities sum to 1:",
+        "X = 1, −7, 3.14159 with 0.5, 0.2, 0.3.",
+        f"Ten draws: {', '.join(f'{v:.3g}' for v in custom)}",
+    ], spacing=0.08)
+
+    ax = fig.add_subplot(gs[1, 0])
+    ax.bar(range(11), counts / 500, width=0.65, color=BLUE, zorder=2, label="500 runs of 10 tosses")
+    ax.plot(range(11), exact, "o", color=ORANGE, markersize=7, zorder=3, label="exact probability")
+    ax.set_xticks(range(11))
+    ax.set_ylim(0, 0.33)
+    ax.set_xlabel("x (heads in 10 tosses)")
+    ax.set_ylabel("relative frequency")
+    ax.grid(axis="y", zorder=0)
+    ax.legend(loc="upper left", fontsize=9.5)
+    ax.set_title("A histogram estimates P(X = x)")
+
+    pair = gs[1, 1].subgridspec(1, 2, wspace=0.4)
+    ax = fig.add_subplot(pair[0])
+    ks = np.arange(1, 9)
+    ax.bar(ks, [(geometric == k).mean() for k in ks], width=0.65, color=BLUE, zorder=2)
+    ax.plot(ks, 0.5 ** ks, "o", color=ORANGE, markersize=5, zorder=3)
+    ax.text(5.2, 0.3, "1, 2, 3, …\na list without end", ha="center", fontsize=10, color=INK2)
+    ax.set_xticks(ks)
+    ax.set_ylim(0, 0.55)
+    ax.grid(axis="y", zorder=0)
+    ax.set_xlabel("flips until first heads", fontsize=10)
+    ax.set_ylabel("probability")
+    ax.set_title("Discrete: countable", fontsize=12)
+    ax = fig.add_subplot(pair[1])
+    ax.hist(waits, bins=50, density=True, color=AQUA, zorder=2)
+    ax.set_ylim(0, 0.16)
+    ax.grid(axis="y", zorder=0)
+    ax.set_xlabel("minutes until the bus", fontsize=10)
+    ax.set_ylabel("density")
+    ax.set_title("Continuous: an interval", fontsize=12)
+
+    panel(fig.add_subplot(gs[1, 2]), "Discrete vs. continuous", [
+        "`discrete            continuous`",
+        "`heads in 10 flips   bus wait time`",
+        "`1s in dice rolls    jump height`",
+        "`sick patients       mm of rain`",
+        "",
+        "The test is countability, not finiteness:",
+        "flips until the first heads can be any of",
+        "1, 2, 3, … and is still discrete.",
+        "",
+        "Continuous values fill a whole interval",
+        "(1, 1.01, 1.001, …) that cannot be listed.",
+    ], spacing=0.08)
+    save(fig, name="01_random_variables.png")
+
+
+# ================================================================ notebook 05
+def sheet_05_bernoulli():
+    def bernoulli_pmf(x, p):
+        return p ** x * (1 - p) ** (1 - x)
+
+    rng = np.random.default_rng(seed=42)
+    trials = rng.random((100_000, 10)) < 0.5
+    x = trials.sum(axis=1)
+    _, exact = binomial_pmf(10, 0.5)
+    sim = {k: (x == k).mean() for k in [0, 3, 5, 7, 10]}
+    assert [f"{sim[k]:.4f}" for k in sim] == ["0.0010", "0.1168", "0.2473", "0.1175", "0.0009"]
+
+    fig = new_figure("The Bernoulli distribution: one success/failure trial",
+                     "X ~ Bernoulli(p): X = 1 (success) with probability p, X = 0 (failure) with 1 − p. "
+                     "Sum n of them and you get Binomial(n, p).")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    trio = gs[0, 0].subgridspec(1, 3, wspace=0.18)
+    for i, (name, p) in enumerate([("coin", 0.5), ("die: a 1", 1 / 6), ("sick patient", 0.1)]):
+        ax = fig.add_subplot(trio[i])
+        ax.bar([0, 1], [bernoulli_pmf(0, p), bernoulli_pmf(1, p)], width=0.6, color=[BLUE_LIGHT, ORANGE],
+               zorder=2)
+        for v in (0, 1):
+            ax.text(v, bernoulli_pmf(v, p) + 0.02, f"{bernoulli_pmf(v, p):.2f}", ha="center", fontsize=10)
+        ax.set_xticks([0, 1])
+        ax.set_ylim(0, 1.05)
+        ax.grid(axis="y", zorder=0)
+        ax.set_title(f"p = {frac_label(p)}", fontsize=11.5)
+        ax.set_xlabel(f"x: {name}", fontsize=10)
+        if i == 0:
+            ax.set_ylabel("p(x)")
+        else:
+            ax.set_yticklabels([])
+    fig.text(0.05 + (0.975 - 0.05) / 6 - 0.012, 0.88, "Same two bars, one parameter p",
+             ha="center", fontsize=13, weight="bold")
+
+    ax = fig.add_subplot(gs[0, 1])
+    rows = trials[:10].astype(int)
+    for r in range(10):
+        for c in range(10):
+            ax.add_patch(Rectangle((c, r), 0.92, 0.86, facecolor=ORANGE if rows[r, c] else BLUE_LIGHT,
+                                   edgecolor="none"))
+            ax.text(c + 0.46, r + 0.43, str(rows[r, c]), ha="center", va="center", fontsize=9,
+                    color="white" if rows[r, c] else INK)
+        ax.text(10.4, r + 0.43, f"= {rows[r].sum()}", va="center", fontsize=10.5, weight="bold")
+    ax.set_xlim(0, 11.5)
+    ax.set_ylim(10, 0)
+    ax.set_xticks(np.arange(10) + 0.46, range(1, 11), fontsize=9)
+    ax.set_yticks([])
+    ax.tick_params(length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_xlabel("Bernoulli(0.5) trial")
+    ax.set_title("10 trials per run, summed: one binomial value")
+
+    panel(fig.add_subplot(gs[0, 2]), "The Bernoulli PMF", [
+        r"$p(1) = p,\qquad p(0) = 1 - p$",
+        "",
+        r"One line: $p(x) = p^x (1-p)^{1-x}$,  x ∈ {0, 1}",
+        "",
+        "Both PMF rules hold: p, 1 − p ≥ 0",
+        "and p + (1 − p) = 1.",
+        "",
+        "\"Success\" is just the thing being counted,",
+        "even a sick patient.",
+        "",
+        "Free throw, 78%: p(1) = 0.78, p(0) = 0.22.",
+    ], spacing=0.08)
+
+    stack = gs[1, 0].subgridspec(1, 4, wspace=0.18)
+    for i, n in enumerate([1, 2, 3, 10]):
+        k, pmf = binomial_pmf(n, 0.5)
+        ax = fig.add_subplot(stack[i])
+        ax.bar(k, pmf, width=0.7, color=ORANGE if n == 1 else BLUE, zorder=2)
+        ax.set_xticks(k if n <= 3 else [0, 5, 10])
+        ax.set_ylim(0, 0.6)
+        ax.grid(axis="y", zorder=0)
+        ax.set_title("n = 1: Bernoulli" if n == 1 else f"n = {n}", fontsize=11.5)
+        ax.set_xlabel("successes", fontsize=10)
+        if i == 0:
+            ax.set_ylabel("Binomial(n, 0.5)")
+        else:
+            ax.set_yticklabels([])
+    fig.text(0.05 + (0.975 - 0.05) / 6 - 0.012, 0.425, "Stack Bernoullis: Bernoulli(p) = Binomial(1, p)",
+             ha="center", fontsize=13, weight="bold")
+
+    ax = fig.add_subplot(gs[1, 1])
+    ax.bar(range(11), exact, width=0.62, color=BLUE_LIGHT, zorder=2, label="Binomial(10, 0.5)")
+    ax.plot(range(11), [(x == k).mean() for k in range(11)], "o", color=ORANGE, markersize=8, zorder=3,
+            label="sum of 10 Bernoullis, 100,000 runs")
+    ax.set_xticks(range(11))
+    ax.set_ylim(0, 0.36)
+    ax.set_xlabel("x (successes in 10 trials)")
+    ax.set_ylabel("probability")
+    ax.grid(axis="y", zorder=0)
+    ax.legend(loc="upper left", fontsize=9.5)
+    ax.set_title("Summed Bernoullis are binomial")
+
+    lines = ["`k    sum of Bernoullis   Binomial(10, 0.5)`"]
+    lines += [f"`{k:>2}        {sim[k]:.4f}             {exact[k]:.4f}`" for k in sim]
+    lines += ["", "Bernoulli is the atom of discrete probability.",
+              "40 emails, each spam with p = 0.2:",
+              "the spam count is Binomial(40, 0.2)."]
+    panel(fig.add_subplot(gs[1, 2]), "Simulation vs. formula", lines, spacing=0.08)
+    save(fig, name="05_bernoulli_distribution.png")
+
+
+# ================================================================ notebook 06
+def sheet_06_continuous():
+    rng = np.random.default_rng(seed=42)
+    calls = rng.gamma(shape=4.0, scale=0.55, size=200_000)
+    calls = calls[calls <= 5]
+    assert len(calls) == 195_982 and (calls == 1.0).sum() == 0
+    assert ((calls > 0.95) & (calls < 1.05)).sum() == 5_846
+    frac = ((calls >= 1) & (calls <= 2)).mean()
+    density, d_edges = np.histogram(calls, bins=200, range=(0, 5), density=True)
+    centers = (d_edges[:-1] + d_edges[1:]) / 2
+    mask = (centers >= 1) & (centers <= 2)
+    slice_area = trapezoid(density[mask], centers[mask])
+    total = trapezoid(density, centers)
+    assert f"{frac:.4f}" == "0.3878" and f"{slice_area:.4f}" == "0.3790"
+    windows = np.histogram(calls, bins=np.arange(0, 6, 1.0))[0] / len(calls)
+    window_sum = (np.histogram(calls, bins=np.arange(0, 5.25, 0.25))[0] / len(calls))[4:8].sum()
+    assert f"{window_sum:.4f}" == "0.3878"
+
+    fig = new_figure("From discrete to continuous: probability moves from points to areas",
+                     "A call can last any time in [0, 5] min, so each exact value has probability 0. "
+                     "Ask about windows; refine them forever and the bars become a curve of area 1.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    steps = gs[0, :2].subgridspec(1, 4, wspace=0.12)
+    for i, (width, title) in enumerate([(1.0, "1-minute windows"), (0.5, "30-second windows"),
+                                        (0.25, "15-second windows"), (None, "the limit: a curve")]):
+        ax = fig.add_subplot(steps[i])
+        if width is None:
+            ax.fill_between(centers, density, color=BLUE, alpha=0.85, zorder=2)
+            ax.text(2.5, 0.08, f"area = {total:.3f}", ha="center", fontsize=11, color="white", weight="bold",
+                    zorder=3)
+        else:
+            edges = np.arange(0, 5 + width, width)
+            heights = np.histogram(calls, bins=edges, density=True)[0]
+            ax.bar(edges[:-1], heights, width=width, align="edge", color=BLUE, edgecolor=SURFACE, zorder=2)
+            ax.text(2.5 + 1.25, 0.47, f"{len(heights)} bars", ha="center", fontsize=10.5, color=INK2)
+        ax.set_xlim(0, 5)
+        ax.set_ylim(0, 0.55)
+        ax.grid(axis="y", zorder=0)
+        ax.set_title(title, fontsize=12)
+        ax.set_xlabel("call duration (min)", fontsize=10)
+        if i == 0:
+            ax.set_ylabel("density (area = prob.)")
+        else:
+            ax.set_yticklabels([])
+
+    lines = ["`window   probability`"]
+    lines += [f"`{i}-{i + 1} min  {windows[i]:.4f}`" for i in range(5)]
+    lines += [f"`sum      {windows.sum():.4f}`", "",
+              "Every refinement is still a valid discrete",
+              "distribution: the windows always sum to 1."]
+    panel(fig.add_subplot(gs[0, 2]), "Windows, 195,982 simulated calls", lines, spacing=0.08)
+
+    ax = fig.add_subplot(gs[1, 0])
+    half_widths = np.array([0.5, 0.1, 0.01, 0.001, 0.0001])
+    probs = [((calls > 1 - h) & (calls < 1 + h)).mean() for h in half_widths]
+    labels = [f"±{h:g}" for h in half_widths]
+    ax.bar(range(len(half_widths)), probs, width=0.62, color=BLUE, zorder=2)
+    for i, v in enumerate(probs):
+        ax.text(i, v + 0.006, f"{v:.4f}" if v >= 0.001 else f"{v:.6f}", ha="center", fontsize=10)
+    ax.text(len(half_widths), 0.012, "exactly 1:\n0 calls", ha="center", fontsize=10, color=ORANGE,
+            weight="bold")
+    ax.set_xticks(range(len(half_widths) + 1), labels + ["±0"])
+    ax.set_ylim(0, 0.33)
+    ax.set_xlabel("window around 1 minute")
+    ax.set_ylabel("fraction of calls")
+    ax.grid(axis="y", zorder=0)
+    ax.set_title("Shrink the window, the probability → 0")
+
+    ax = fig.add_subplot(gs[1, 1])
+    ax.fill_between(centers, density, color=BLUE_LIGHT, zorder=1)
+    ax.plot(centers, density, color=BLUE, linewidth=2.2, zorder=2)
+    ax.fill_between(centers[mask], density[mask], color=ORANGE, alpha=0.85, zorder=2,
+                    label=f"P(1 ≤ X ≤ 2) ≈ area {slice_area:.2f}")
+    ax.set_xlim(0, 5)
+    ax.set_ylim(0, 0.6)
+    ax.set_xlabel("call duration (min)")
+    ax.set_ylabel("density")
+    ax.grid(True)
+    ax.legend(loc="upper right", fontsize=10)
+    ax.set_title(f"Total area {total:.3f}: \"sums to 1\" becomes \"area 1\"")
+
+    panel(fig.add_subplot(gs[1, 2]), "Discrete vs. continuous", [
+        "Discrete: heights at listed values, sum to 1.",
+        "Continuous: P(X = exact value) = 0;",
+        "probabilities are areas of slices, total 1.",
+        "",
+        "P(1 ≤ X ≤ 2), three ways:",
+        f"`fraction of calls          {frac:.4f}`",
+        f"`sum of four 15-s windows   {window_sum:.4f}`",
+        f"`area under 200-bin curve   {slice_area:.4f}`",
+        "",
+        "Halve a window: its probability halves, its",
+        "density (probability ÷ width) stays put.",
+    ], spacing=0.08)
+    save(fig, name="06_continuous_distributions.png")
+
+
+# ================================================================ notebook 09
+def sheet_09_uniform():
+    def uniform_pdf(x, a, b):
+        return np.where((x >= a) & (x <= b), 1 / (b - a), 0.0)
+
+    def uniform_cdf(x, a, b):
+        return np.clip((x - a) / (b - a), 0, 1)
+
+    rng = np.random.default_rng(seed=42)
+    waits = rng.uniform(0, 15, size=200)
+    u = rng.random(100_000)
+    transformed = 2 + (8 - 2) * u
+    assert f"{uniform_cdf(5, 0, 15):.3f}" == "0.333" and f"{1 - uniform_cdf(8, 0, 10):.3f}" == "0.200"
+    assert np.isclose(uniform_cdf(10, 0, 15) - uniform_cdf(5, 0, 15), 1 / 3)
+
+    fig = new_figure("The uniform distribution: every value in [a, b] equally likely",
+                     "A flat PDF of height 1/(b − a), forced by area 1. Probability of a window "
+                     "= its length ÷ (b − a); the CDF climbs in a straight line.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+    xs = np.linspace(-2, 17, 2_000)
+
+    ax = fig.add_subplot(gs[0, 0])
+    ax.plot(xs, uniform_pdf(xs, 0, 15), color=BLUE, linewidth=2.2)
+    for lo, hi, color in [(0, 5, ORANGE), (5, 10, AQUA)]:
+        m = (xs >= lo) & (xs <= hi)
+        ax.fill_between(xs[m], uniform_pdf(xs[m], 0, 15), color=color, alpha=0.8)
+        ax.text((lo + hi) / 2, 1 / 30, "5 × 1/15\n= 1/3", ha="center", va="center", fontsize=10.5,
+                color="white", weight="bold")
+    ax.fill_between(xs[(xs >= 10) & (xs <= 15)], 1 / 15, color=BLUE_LIGHT)
+    ax.text(15.3, 1 / 15, "height\n1/15", va="center", fontsize=10, color=INK2)
+    ax.set_xlim(-2, 18.5)
+    ax.set_ylim(0, 0.1)
+    ax.set_xlabel("wait until answered (min)")
+    ax.set_ylabel("f(x)")
+    ax.grid(True)
+    ax.set_title("Uniform(0, 15): height × 15 = 1")
+
+    ax = fig.add_subplot(gs[0, 1])
+    ax.plot(xs, uniform_cdf(xs, 0, 15), color=BLUE, linewidth=2.2)
+    for t in (5, 10):
+        Ft = uniform_cdf(t, 0, 15)
+        ax.plot([t, t], [0, Ft], color=MUTED, linestyle=":", linewidth=1.2)
+        ax.plot([-2, t], [Ft, Ft], color=MUTED, linestyle=":", linewidth=1.2)
+        ax.plot(t, Ft, "o", color=INK, markersize=6)
+        ax.text(t - 0.4, Ft + 0.04, f"F({t}) = {frac_label(Ft)}", ha="right", fontsize=10.5)
+    bracket(ax, 12, 1 / 3, 2 / 3, "P(5 ≤ T ≤ 10)\n= 1/3", side="right")
+    ax.hlines([1 / 3, 2 / 3], 5, 12, color=MUTED, linestyle=":", linewidth=1.2)
+    ax.text(-1.8, 0.1, "flat at 0", fontsize=10, color=INK2)
+    ax.text(15.3, 0.92, "flat at 1", fontsize=10, color=INK2)
+    ax.set_xlim(-2, 18.5)
+    ax.set_ylim(0, 1.1)
+    ax.set_xlabel("x")
+    ax.set_ylabel("F(x)")
+    ax.grid(True)
+    ax.set_title("CDF: flat, diagonal (x − a)/(b − a), flat")
+
+    panel(fig.add_subplot(gs[0, 2]), r"$T \sim \mathrm{Uniform}(a, b)$", [
+        r"$f(x) = \dfrac{1}{b-a}$   for $a \leq x \leq b$, else 0",
+        "",
+        "",
+        r"$F(x) = \dfrac{x-a}{b-a}$   on [a, b]; 0 before, 1 after",
+        "",
+        "",
+        "Two parameters: the endpoints a and b.",
+        "Window probability ∝ window length.",
+        "",
+        "Call center, Uniform(0, 15): P(T ≤ 5) = 5/15,",
+        "and every 5-minute window also gets 1/3.",
+        "",
+        "Median: (m − a)/(b − a) = 0.5 → m = (a + b)/2.",
+    ], spacing=0.08)
+
+    ax = fig.add_subplot(gs[1, 0])
+    for a, b, color, style in [(0, 15, BLUE, "-"), (2, 8, AQUA, "--"), (5, 7, ORANGE, "-")]:
+        ax.plot(xs, uniform_pdf(xs, a, b), color=color, linestyle=style, linewidth=2.2,
+                label=f"Uniform({a}, {b}): height 1/{b - a} = {1 / (b - a):.3f}")
+    ax.set_xlim(-2, 17)
+    ax.set_xticks(range(0, 16, 5))
+    ax.set_ylim(0, 0.75)
+    ax.set_xlabel("x")
+    ax.set_ylabel("f(x)")
+    ax.grid(True)
+    ax.legend(loc="upper right", fontsize=9.5)
+    ax.set_title("All area 1: narrower interval, taller PDF")
+
+    ax = fig.add_subplot(gs[1, 1])
+    ax.hist(waits, bins=15, range=(0, 15), density=True, color=BLUE_LIGHT, edgecolor=SURFACE, zorder=2,
+            label="200 recorded waits")
+    ax.plot(waits, np.full_like(waits, 0.004), "|", color=BLUE, markersize=10, zorder=3)
+    ax.axhline(1 / 15, color=ORANGE, linestyle="--", linewidth=2, zorder=3, label="PDF height 1/15")
+    ax.set_xlim(-0.5, 15.5)
+    ax.set_ylim(0, 0.13)
+    ax.set_xlabel("wait (min)")
+    ax.set_ylabel("density")
+    ax.grid(axis="y", zorder=0)
+    ax.legend(loc="upper right", fontsize=9.5)
+    ax.set_title("200 calls: roughly flat, with noise")
+
+    panel(fig.add_subplot(gs[1, 2]), "The bus: Uniform(0, 10)", [
+        "P(wait ≤ 2) = 2/10 = 0.2",
+        f"P(wait > 8) = 1 − F(8) = {1 - uniform_cdf(8, 0, 10):.1f}  (symmetry)",
+        "P(4 ≤ wait ≤ 6) = 2/10 = 0.2",
+        "",
+        "5 minutes passed, no bus: the rest of the",
+        "wait is Uniform(5, 10), so",
+        "P(X ≤ 7 | X > 5) = 2/5 = 0.4.",
+        "",
+        "a + (b − a)·U turns Uniform(0, 1) into",
+        f"Uniform(a, b): 100,000 draws on (2, 8),",
+        f"mean {transformed.mean():.3f} (target 5).",
+    ], spacing=0.08)
+    save(fig, name="09_uniform_distribution.png")
+
+
 # ================================================================ notebook 02
 def sheet_02_pmf():
     def pmf_heads(n_coins):
@@ -837,11 +1273,15 @@ def sheet_12_sampling():
 
 
 if __name__ == "__main__":
+    sheet_01_random_variables()
     sheet_02_pmf()
     sheet_03_binomial()
     sheet_04_binomial_coefficient()
+    sheet_05_bernoulli()
+    sheet_06_continuous()
     sheet_07_pdf()
     sheet_08_cdf()
+    sheet_09_uniform()
     sheet_10_normal()
     sheet_11_chi_squared()
     sheet_12_sampling()

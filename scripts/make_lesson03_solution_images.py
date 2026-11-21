@@ -17,7 +17,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from viz_style import (REPO, SURFACE, INK, INK2, MUTED, GRID, BLUE, ORANGE, AQUA, SEQ,
+from viz_style import (REPO, SURFACE, INK, INK2, MUTED, GRID, BLUE, BLUE_LIGHT, ORANGE, AQUA, SEQ,
                        new_figure, grid, frac_label, heat, bars, grouped_bars, panel,
                        trapezoid, density_image)
 from viz_style import save as _save
@@ -708,6 +708,804 @@ def fig_05_ex5():
     save(fig, name="05_ex5_independence_via_conditionals.png")
 
 
+# ================================================================ notebook 01
+CHILD_AGES = [7, 7, 7, 8, 8, 9, 9, 9, 9, 10]
+CHILD_HEIGHTS = [45, 46, 46, 47, 47, 49, 49, 49, 50, 50]
+
+
+def joint_table(age_values, height_values):
+    table = np.zeros((len(AGES), len(HEIGHTS)))
+    np.add.at(table, ([AGES.index(a) for a in age_values], [HEIGHTS.index(h) for h in height_values]), 1)
+    return table / len(age_values)
+
+
+def fig_01_ex6():
+    exact = joint_table(CHILD_AGES, CHILD_HEIGHTS)
+    assert np.allclose(exact, CHILDREN)
+    rng = np.random.default_rng(0)
+    idx = rng.integers(0, len(CHILD_AGES), size=100_000)
+    resampled = joint_table(np.array(CHILD_AGES)[idx], np.array(CHILD_HEIGHTS)[idx])
+    rng = np.random.default_rng(1)
+    sep_age = rng.choice(AGES, size=100_000, p=P_AGE)
+    sep_height = rng.choice(HEIGHTS, size=100_000, p=P_HEIGHT)
+    separate = joint_table(sep_age, sep_height)
+    product = np.outer(P_AGE, P_HEIGHT)
+    d_resampled = np.abs(resampled - exact).max()
+    d_sep_exact = np.abs(separate - exact).max()
+    d_sep_product = np.abs(separate - product).max()
+    assert d_resampled < 0.01 and d_sep_product < 0.01 and d_sep_exact > 0.15
+    fmt = lambda m: [[f"{v:.3f}" if v > 5e-4 else "0" for v in row] for row in m]
+    i7, j49 = AGES.index(7), HEIGHTS.index(49)
+
+    fig = new_figure("Exercise 6: resample whole children vs draw age and height separately",
+                     "100,000 simulated children each way. Only the paired simulation recovers the joint table.")
+    gs = grid(fig, wspace=0.3)
+    heat(fig.add_subplot(gs[0, 0]), exact, AGES, HEIGHTS, "Exact joint (10 children)",
+         "age", "height (inches)", labels=fmt(exact), vmax=0.3, fontsize=10)
+    heat(fig.add_subplot(gs[0, 1]), resampled, AGES, HEIGHTS, "Resampled whole children",
+         "age", "height (inches)", labels=fmt(resampled), vmax=0.3, fontsize=10)
+    heat(fig.add_subplot(gs[0, 2]), separate, AGES, HEIGHTS, "Age and height drawn separately",
+         "age", "height (inches)", labels=fmt(separate), vmax=0.3, fontsize=10,
+         highlight_cells=[(i7, j49)])
+    heat(fig.add_subplot(gs[1, 0]), product, AGES, HEIGHTS, "Product P(age) · P(height)",
+         "age", "height (inches)", labels=fmt(product), vmax=0.3, fontsize=10,
+         highlight_cells=[(i7, j49)])
+    panel(fig.add_subplot(gs[1, 1]), "Max absolute differences", [
+        f"`resampled vs exact:   {d_resampled:.4f}`",
+        f"`separate  vs exact:   {d_sep_exact:.4f}`",
+        f"`separate  vs product: {d_sep_product:.4f}`",
+        "",
+        "Resampling converges to the exact joint;",
+        "separate draws converge to the product.",
+        "",
+        f"Cell (9, 49): exact 0.3, separate {separate[AGES.index(9), j49]:.3f}.",
+        f"Cell (7, 49): exact 0, separate {separate[i7, j49]:.3f}",
+        "(orange box): an impossible child.",
+    ], spacing=0.085)
+    panel(fig.add_subplot(gs[1, 2]), "Why", [
+        "Resampling picks a whole child, so",
+        "each age arrives with its own height:",
+        "the pairing survives.",
+        "",
+        "Separate draws only use the two",
+        "marginals, so they can only rebuild",
+        "the product table. More samples do",
+        "not fix it.",
+        "",
+        "Both get the marginals right; only the",
+        "paired one gets the interior right.",
+    ], spacing=0.08)
+    save(fig, name="01_ex6_resampling_vs_separate_draws.png")
+
+
+# ================================================================ notebook 02
+def fig_02_ex5():
+    joint = np.zeros((6, 6))  # rows M = max, columns X = first die
+    for a in FACES:
+        for b in FACES:
+            joint[max(a, b) - 1, a - 1] += 1 / 36
+    p_m, p_x = joint.sum(axis=1), joint.sum(axis=0)
+    product = np.outer(p_m, p_x)
+    gap = np.abs(joint - product)
+    mismatches = int((~np.isclose(joint, product)).sum())
+    closest = np.unravel_index(gap.argmin(), gap.shape)
+    farthest = np.unravel_index(gap.argmax(), gap.shape)
+    assert mismatches == 36 and (closest, farthest) == ((2, 0), (5, 5))
+    dice = np.full((6, 6), 1 / 36)
+    dice_mismatches = int((~np.isclose(dice, np.outer(dice.sum(axis=1), dice.sum(axis=0)))).sum())
+    assert dice_mismatches == 0
+    fmt = lambda m: [[f"{v:.3f}" if v > 5e-4 else "0" for v in row] for row in m]
+    cells = [closest, farthest]
+
+    fig = new_figure("Exercise 5: the factorization test on (first die, maximum)",
+                     "Independent means P(m, x) = P(m) · P(x) in every cell. "
+                     "Two dice pass; (die, max) fails all 36.")
+    gs = grid(fig, wspace=0.3)
+    heat(fig.add_subplot(gs[0, 0]), joint, FACES, FACES, "Joint P(M = m, X = x)", "M = maximum",
+         "X = first die", labels=[[frac_label(v) for v in row] for row in joint], vmax=0.2,
+         highlight_cells=cells)
+    heat(fig.add_subplot(gs[0, 1]), product, FACES, FACES, "Product P(M = m) · P(X = x)",
+         "M = maximum", "X = first die", labels=fmt(product), vmax=0.2, fontsize=10,
+         highlight_cells=cells)
+    heat(fig.add_subplot(gs[0, 2]), gap, FACES, FACES, "|joint − product|", "M = maximum",
+         "X = first die", labels=fmt(gap), vmax=0.2, fontsize=10, highlight_cells=cells)
+    panel(fig.add_subplot(gs[1, 0]), "Factorization report", [
+        f"Two dice: {dice_mismatches} of 36 cells fail",
+        "→ independent.",
+        "",
+        f"(die, max): {mismatches} of 36 cells fail",
+        "→ dependent.",
+        "",
+        "Every cell of the max table misses its",
+        "product, including the zeros above the",
+        "diagonal (x > m is impossible, but the",
+        "product gives it positive probability).",
+    ], spacing=0.085)
+    m, x = closest
+    panel(fig.add_subplot(gs[1, 1]), f"Closest cell: (M, X) = ({m + 1}, {x + 1})", [
+        f"joint     = {frac_label(joint[m, x])} = {joint[m, x]:.4f}",
+        f"product = {frac_label(p_m[m])} · 1/6 = {product[m, x]:.4f}",
+        f"gap       = {gap[m, x]:.4f}",
+        "",
+        "Nearly equal, but not equal: a near",
+        "miss is still a miss. One matching cell",
+        "never proves independence anyway.",
+    ], spacing=0.09)
+    m, x = farthest
+    panel(fig.add_subplot(gs[1, 2]), f"Farthest cell: (M, X) = ({m + 1}, {x + 1})", [
+        f"joint     = {frac_label(joint[m, x])} = {joint[m, x]:.4f}",
+        f"product = {frac_label(p_m[m])} · 1/6 = {product[m, x]:.4f}",
+        f"gap       = {gap[m, x]:.4f}",
+        "",
+        "A first die of 6 forces the maximum",
+        "to 6: P(M = 6 | X = 6) = 1, far above",
+        "the unconditional P(M = 6) = 11/36.",
+    ], spacing=0.09)
+    save(fig, name="02_ex5_factorization_die_and_max.png")
+
+
+# ================================================================ notebook 06
+AGE = np.array([6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+HEIGHT = np.array([50, 52, 55, 57, 60, 62, 64, 65, 67, 68])
+GRADES = np.array([5, 7, 8, 3, 1, 1, 6, 10, 2, 7])
+NAPS = np.array([8, 7, 6, 5, 4, 3, 2, 1, 1, 0])
+
+
+def pop_cov(x, y):
+    return np.mean((x - x.mean()) * (y - y.mean()))
+
+
+def pop_corr(x, y):
+    return pop_cov(x, y) / (x.std() * y.std())
+
+
+def fig_06_ex4():
+    versions = [("inches", HEIGHT, "height (in)"), ("centimeters (× 2.54)", HEIGHT * 2.54, "height (cm)"),
+                ("inches + 100", HEIGHT + 100, "height + 100 (in)")]
+    covs = [pop_cov(AGE, y) for _, y, _ in versions]
+    assert np.allclose(covs, [17, 17 * 2.54, 17])
+
+    fig = new_figure("Exercise 4: covariance depends on units, not on shifts",
+                     "The same ten children, with heights rescaled to centimeters and shifted by 100.")
+    gs = grid(fig, wspace=0.3)
+    for col, ((name, y, label), cov) in enumerate(zip(versions, covs)):
+        ax = fig.add_subplot(gs[0, col])
+        ax.scatter(AGE, y, s=60, color=BLUE, zorder=3)
+        ax.plot(AGE.mean(), y.mean(), "s", color=ORANGE, markersize=10, zorder=4,
+                label=f"mean ({AGE.mean():g}, {y.mean():g})")
+        ax.set_title(f"{name}: Cov = {cov:.2f}")
+        ax.set_xlabel("age")
+        ax.set_ylabel(label)
+        ax.grid(True)
+        ax.legend(loc="upper left", fontsize=10)
+    ax = fig.add_subplot(gs[1, 0])
+    bars(ax, ["inches", "cm", "inches + 100"], covs, "Cov(age, height)", "", ylabel="covariance",
+         ylim=52, label_fmt=lambda v: f"{v:.2f}", highlight=1)
+    panel(fig.add_subplot(gs[1, 1]), "The two rules", [
+        r"Scaling:  $\mathrm{Cov}(X, aY) = a\,\mathrm{Cov}(X, Y)$",
+        f"    2.54 × 17 = {covs[1]:.2f}",
+        "",
+        r"Shifting:  $\mathrm{Cov}(X, Y + b) = \mathrm{Cov}(X, Y)$",
+        "    Centering subtracts the mean, and the",
+        "    +100 leaves with it.",
+        "",
+        "The three scatter plots have the same",
+        "shape; only the axis labels changed.",
+    ], spacing=0.09)
+    panel(fig.add_subplot(gs[1, 2]), "Covariance's weakness", [
+        "Covariance carries units",
+        "(years × inches, or years × cm), so",
+        "17 and 43.18 describe the same",
+        "relationship.",
+        "",
+        "Its size alone does not say how",
+        "strong a relationship is. Dividing by",
+        "the standard deviations (correlation)",
+        "fixes that.",
+    ], spacing=0.085)
+    save(fig, name="06_ex4_covariance_units.png")
+
+
+def fig_06_ex5():
+    x = np.array([-2, -1, 0, 1, 2])
+    y = x ** 2
+    cx, cy = x - x.mean(), y - y.mean()
+    products = cx * cy
+    assert pop_cov(x, y) == 0 and y.mean() == 2
+
+    fig = new_figure("Exercise 5: zero covariance, perfect relationship",
+                     "y = x² is a function of x, yet the products cancel exactly: Cov = 0.")
+    gs = grid(fig, wspace=0.3)
+    ax = fig.add_subplot(gs[0, 0])
+    curve = np.linspace(-2.3, 2.3, 200)
+    ax.plot(curve, curve ** 2, color=MUTED, linewidth=1.2, zorder=2)
+    ax.scatter(x, y, s=80, color=BLUE, zorder=3)
+    ax.plot(x.mean(), y.mean(), "s", color=ORANGE, markersize=11, zorder=4, label="mean (0, 2)")
+    ax.set_title("The data: y = x²")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.grid(True)
+    ax.legend(loc="upper center", fontsize=10)
+
+    ax = fig.add_subplot(gs[0, 1])
+    lim_x, lim_y = 3, 3
+    ax.fill_between([0, lim_x], 0, lim_y, color=AQUA, alpha=0.12, zorder=0)
+    ax.fill_between([-lim_x, 0], -lim_y, 0, color=AQUA, alpha=0.12, zorder=0)
+    ax.axhline(0, color=INK2, linewidth=1)
+    ax.axvline(0, color=INK2, linewidth=1)
+    colors = [AQUA if p > 0 else (ORANGE if p < 0 else MUTED) for p in products]
+    ax.scatter(cx, cy, s=80, c=colors, zorder=3)
+    for xi, yi, p in zip(cx, cy, products):
+        ax.annotate(f"{p:+g}" if p else "0", (xi, yi), xytext=(8, 6), textcoords="offset points",
+                    fontsize=10.5, color=INK)
+    ax.set_xlim(-lim_x, lim_x)
+    ax.set_ylim(-lim_y, lim_y)
+    ax.set_title("Centered points and their products")
+    ax.set_xlabel("x − μx")
+    ax.set_ylabel("y − μy")
+
+    ax = fig.add_subplot(gs[0, 2])
+    ax.bar(x, products, width=0.6, color=[AQUA if p > 0 else (ORANGE if p < 0 else MUTED) for p in products],
+           zorder=2)
+    ax.axhline(0, color=INK2, linewidth=1)
+    ax.set_ylim(-5, 5)
+    ax.set_xticks(x)
+    ax.set_title(f"Products: sum = {products.sum():g}, Cov = {products.mean():g}")
+    ax.set_xlabel("x")
+    ax.set_ylabel("(x − μx)(y − μy)")
+    ax.grid(axis="y", zorder=0)
+
+    panel(fig.add_subplot(gs[1, :2]), "Why the sign logic fails here", [
+        r"Centering: $\mu_x = 0$, $\mu_y = 2$, so the centered points are (−2, 2), (−1, −1), (0, −2), (1, −1), (2, 2).",
+        "",
+        "Products: −4, +1, 0, −1, +4. Mirror points x and −x have the same centered y but opposite",
+        "centered x, so their products are equal and opposite: −4 cancels +4, +1 cancels −1.",
+        "",
+        "Covariance asks one question: does y tend to go up or down as x goes up, along a line?",
+        "For a U shape the honest answer is \"both, equally\", so the average product is 0.",
+        "",
+        f"`products = {[int(v) for v in products]}   mean = {products.mean():g}`",
+    ], spacing=0.09)
+    panel(fig.add_subplot(gs[1, 2]), "Key takeaways", [
+        "Covariance detects linear trends only.",
+        "",
+        "Cov = 0 rules out a linear relationship,",
+        "not every relationship.",
+        "",
+        "Here y is completely determined by x:",
+        "knowing x tells you y exactly.",
+    ], spacing=0.09)
+    save(fig, name="06_ex5_zero_covariance_parabola.png")
+
+
+# ================================================================ notebook 07
+def game_stats(outcomes):
+    p = np.array([o[0] for o in outcomes])
+    x = np.array([o[1] for o in outcomes], float)
+    y = np.array([o[2] for o in outcomes], float)
+    mu_x, mu_y = np.sum(p * x), np.sum(p * y)
+    return mu_x, mu_y, np.sum(p * (x - mu_x) * (y - mu_y))
+
+
+def fig_07_ex5():
+    def corner_game(p):
+        return [(p, 1, 1), (p, -1, -1), (0.5 - p, 1, -1), (0.5 - p, -1, 1)]
+
+    p_needed = (0.5 + 1) / 4
+    ps = np.linspace(0, 0.5, 101)
+    covs = np.array([game_stats(corner_game(p))[2] for p in ps])
+    assert np.allclose(covs, 4 * ps - 1) and abs(game_stats(corner_game(p_needed))[2] - 0.5) < 1e-12
+
+    fig = new_figure("Exercise 5: designing a game with covariance +0.5",
+                     "Keep game 3's four corners; give each same-sign corner probability p, "
+                     "each opposite-sign corner ½ − p.")
+    gs = grid(fig, wspace=0.3)
+    ax = fig.add_subplot(gs[0, :2])
+    ax.plot(ps, covs, color=BLUE, linewidth=2.5, zorder=2, label="Cov = 4p − 1")
+    marks = [(0, "game 2 (zero-sum)"), (0.25, "game 3 (anything goes)"),
+             (p_needed, "new game: p = 3/8"), (0.5, "game 1 (win together)")]
+    for p, name in marks:
+        cov = 4 * p - 1
+        color = ORANGE if p == p_needed else INK2
+        ax.plot(p, cov, "o", color=color, markersize=10, zorder=3)
+        offset, va, ha = ((-14, 8), "bottom", "right") if p == 0.5 else ((12, -6), "top", "left")
+        ax.annotate(f"{name}\nCov = {cov:+g}".replace("+0\n", "0\n").replace("= +0", "= 0"), (p, cov),
+                    xytext=offset, textcoords="offset points", fontsize=10.5, color=color, va=va, ha=ha)
+    ax.axhline(0, color=MUTED, linewidth=0.8)
+    ax.set_xlim(-0.02, 0.52)
+    ax.set_ylim(-1.55, 1.55)
+    ax.set_xlabel("p = probability of each same-sign corner")
+    ax.set_ylabel("Cov(X, Y)")
+    ax.set_title("One dial from −1 to +1")
+    ax.grid(True)
+    ax.legend(loc="upper left", fontsize=10)
+
+    ax = fig.add_subplot(gs[0, 2])
+    for prob, x, y in corner_game(p_needed):
+        ax.scatter(x, y, s=5000 * prob, color=AQUA if x == y else ORANGE, alpha=0.85, zorder=3)
+        ax.text(x, y, frac_label(prob, 8), ha="center", va="center", fontsize=12, weight="bold",
+                color="white")
+    ax.axhline(0, color=MUTED, linewidth=0.8)
+    ax.axvline(0, color=MUTED, linewidth=0.8)
+    ax.set_xlim(-1.9, 1.9)
+    ax.set_ylim(-1.9, 1.9)
+    ax.set_xticks([-1, 0, 1])
+    ax.set_yticks([-1, 0, 1])
+    ax.set_aspect("equal")
+    ax.set_xlabel("player X wins")
+    ax.set_ylabel("player Y wins")
+    ax.set_title("The new game (dot area ∝ probability)")
+
+    panel(fig.add_subplot(gs[1, :2]), "Derivation", [
+        r"Means: $E[X] = p - p + (\frac{1}{2} - p) - (\frac{1}{2} - p) = 0$, and likewise $E[Y] = 0$.",
+        "",
+        r"So $\mathrm{Cov} = E[XY]$. Same-sign corners have $xy = +1$, opposite-sign corners $xy = -1$:",
+        r"$\mathrm{Cov} = 2p\cdot(+1) + 2(\frac{1}{2} - p)\cdot(-1) = 4p - 1$",
+        "",
+        r"Set $4p - 1 = 0.5$:  $p = \frac{3}{8}$,  opposite-sign corners get $\frac{1}{2} - \frac{3}{8} = \frac{1}{8}$.",
+        "",
+        f"`distribution_stats check: Cov = {game_stats(corner_game(p_needed))[2]:.3f}`",
+    ], spacing=0.1)
+    panel(fig.add_subplot(gs[1, 2]), "What it shows", [
+        "Each player still wins or loses 1",
+        "with probability ½ (E = 0, Var = 1).",
+        "",
+        "Only the split between the two",
+        "diagonals changes, and the covariance",
+        "reads it off: 3/4 of the mass on the",
+        "rising diagonal gives +0.5.",
+    ], spacing=0.09)
+    save(fig, name="07_ex5_designing_covariance.png")
+
+
+def fig_07_ex6():
+    rng = np.random.default_rng(0)
+    rolls = rng.integers(1, 7, size=(500_000, 10))
+    first, total = rolls[:, 0], rolls.sum(axis=1)
+    cov_sim = pop_cov(first, total)
+    parts = np.array([pop_cov(first, rolls[:, k]) for k in range(10)])
+    assert abs(cov_sim - 35 / 12) < 0.05 and np.isclose(parts.sum(), cov_sim)
+    cond_mean = np.array([total[first == f].mean() for f in FACES])
+    cond_sd = np.array([total[first == f].std() for f in FACES])
+
+    fig = new_figure("Exercise 6: the first die and the sum of ten dice",
+                     "500,000 simulated rolls of ten dice. Cov(X₁, S) stays at Var(X₁) = 35/12, "
+                     "however many dice join the sum.")
+    gs = grid(fig, wspace=0.3)
+    ax = fig.add_subplot(gs[0, :2])
+    ax.errorbar(FACES, cond_mean, yerr=cond_sd, fmt="o", color=BLUE, markersize=9, capsize=6,
+                linewidth=2, zorder=3, label="mean of S given X₁ (bars: ± 1 sd)")
+    line = np.array([0.6, 6.4])
+    ax.plot(line, line + 31.5, color=ORANGE, linestyle="--", linewidth=2, zorder=2,
+            label="X₁ + 31.5 (the other nine dice average 31.5)")
+    ax.set_xlim(0.5, 6.5)
+    ax.set_xticks(FACES)
+    ax.set_xlabel("X₁ = first die")
+    ax.set_ylabel("S = sum of ten dice")
+    ax.set_title("S moves one-for-one with X₁, buried in noise from the other nine")
+    ax.grid(True)
+    ax.legend(loc="upper left", fontsize=10)
+
+    ax = fig.add_subplot(gs[0, 2])
+    labels = ["X₁"] + [f"X{chr(0x2080 + k)}" if k < 10 else "X₁₀" for k in range(2, 11)]
+    colors = [ORANGE] + [BLUE] * 9
+    ax.bar(range(10), parts, color=colors, width=0.62, zorder=2)
+    ax.set_xticks(range(10), labels, fontsize=9.5)
+    ax.set_ylim(-0.3, 3.4)
+    ax.axhline(0, color=INK2, linewidth=1)
+    ax.text(0, parts[0] + 0.08, f"{parts[0]:.3f}", ha="center", va="bottom", fontsize=10)
+    ax.text(5, 0.25, f"each ≈ 0  (largest |value| {np.abs(parts[1:]).max():.3f})", ha="center",
+            fontsize=10, color=INK2)
+    ax.set_title("Cov(X₁, Xₖ) for each die in the sum")
+    ax.set_ylabel("covariance")
+    ax.grid(axis="y", zorder=0)
+
+    panel(fig.add_subplot(gs[1, :2]), "Covariance is additive", [
+        r"$\mathrm{Cov}(X_1, X_1 + X_2 + \cdots + X_{10}) = \mathrm{Cov}(X_1, X_1) + \sum_{k=2}^{10} \mathrm{Cov}(X_1, X_k)$",
+        "",
+        r"$= \mathrm{Var}(X_1) + 0 + \cdots + 0 = \dfrac{35}{12}$",
+        "",
+        "",
+        "The bars on the right are exactly these ten terms; they add up to the simulated value.",
+        "",
+        f"`simulated Cov(X1, S10) = {cov_sim:.4f}    theory 35/12 = {35 / 12:.4f}`",
+    ], spacing=0.1)
+    panel(fig.add_subplot(gs[1, 2]), "Why more dice change nothing", [
+        "Each extra die is independent of X₁,",
+        "so it adds spread to S (the long",
+        "error bars) but no co-movement",
+        "with X₁ (its bar is 0).",
+        "",
+        "The co-movement comes only from X₁",
+        "being part of S, and that part is",
+        "always Var(X₁).",
+    ], spacing=0.09)
+    save(fig, name="07_ex6_first_die_and_ten_dice_sum.png")
+
+
+# ================================================================ notebook 08
+def fig_08_ex5():
+    variables = {"age": AGE, "height": HEIGHT, "grades": GRADES, "naps": NAPS}
+    names = list(variables)
+    pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1:]]
+    abs_cov = np.array([abs(pop_cov(variables[a], variables[b])) for a, b in pairs])
+    bound = np.array([variables[a].std() * variables[b].std() for a, b in pairs])
+    assert np.all(abs_cov <= bound + 1e-9)
+
+    fig = new_figure("Exercise 5: a covariance matrix cannot be arbitrary",
+                     "Every off-diagonal entry obeys |Cov(Xᵢ, Xⱼ)| ≤ σᵢ σⱼ (Cauchy–Schwarz). "
+                     "The children data, pair by pair.")
+    gs = grid(fig, wspace=0.3)
+    ax = fig.add_subplot(gs[0, :2])
+    positions = np.arange(len(pairs))
+    width = 0.38
+    ax.bar(positions - width / 2, bound, width=width - 0.04, color=BLUE_LIGHT, zorder=2, label="bound σᵢ σⱼ")
+    ax.bar(positions + width / 2, abs_cov, width=width - 0.04, color=BLUE, zorder=2, label="|Cov(Xᵢ, Xⱼ)|")
+    for p, b, c in zip(positions, bound, abs_cov):
+        ax.text(p - width / 2, b + 0.4, f"{b:.2f}", ha="center", va="bottom", fontsize=9.5)
+        ax.text(p + width / 2, c + 0.4, f"{c:.2f}", ha="center", va="bottom", fontsize=9.5)
+    ax.set_xticks(positions, [f"{a}, {b}" for a, b in pairs])
+    ax.set_ylim(0, 23)
+    ax.set_ylabel("value")
+    ax.set_title("All six pairs stay under the bound")
+    ax.grid(axis="y", zorder=0)
+    ax.legend(loc="upper right", fontsize=10)
+
+    ax = fig.add_subplot(gs[0, 2])
+    ratio = abs_cov / bound
+    ax.barh(positions, ratio, color=[ORANGE if r > 0.95 else BLUE for r in ratio], height=0.6, zorder=2)
+    for p, r in zip(positions, ratio):
+        ax.text(r + 0.02, p, f"{r:.3f}", va="center", fontsize=10)
+    ax.set_yticks(positions, [f"{a}, {b}" for a, b in pairs])
+    ax.invert_yaxis()
+    ax.set_xlim(0, 1.25)
+    ax.axvline(1, color=INK2, linestyle="--", linewidth=1.2)
+    ax.set_xlabel("|Cov| / (σᵢ σⱼ)")
+    ax.set_title("How close to the bound")
+    ax.grid(axis="x", zorder=0)
+
+    panel(fig.add_subplot(gs[1, :2]), "Why [[1, 3], [3, 1]] is impossible", [
+        r"Variances 1 and 1 give $\sigma_x \sigma_y = 1$, but the matrix asks for $|\mathrm{Cov}| = 3 > 1$.",
+        "",
+        "Another way to see it: a variance can never be negative, yet this matrix would give",
+        r"$\mathrm{Var}(X - Y) = \mathrm{Var}(X) + \mathrm{Var}(Y) - 2\,\mathrm{Cov}(X, Y) = 1 + 1 - 6 = -4$",
+        "",
+        "",
+        "No dataset can co-vary more strongly than its own spreads allow.",
+    ], spacing=0.1)
+    panel(fig.add_subplot(gs[1, 2]), "Reading the ratios", [
+        "The ratio |Cov| / (σᵢ σⱼ) is the size",
+        "of the correlation.",
+        "",
+        "Age, height and naps sit near 1",
+        "(orange): almost perfect lines.",
+        "",
+        "Grades sit near 0: no linear link to",
+        "the other three.",
+    ], spacing=0.09)
+    save(fig, name="08_ex5_cauchy_schwarz_bound.png")
+
+
+def fig_08_ex6():
+    var_a, var_b = 0.04, 0.09
+    cs = [(0.05, ORANGE), (0.0, INK2), (-0.05, AQUA)]
+    half = [0.25 * var_a + 0.25 * var_b + 0.5 * c for c, _ in cs]
+    assert np.allclose(half, [0.0575, 0.0325, 0.0075])
+    w = np.linspace(0, 1, 201)
+
+    fig = new_figure("Exercise 6: portfolio variance and diversification",
+                     "Two assets with variances 0.04 and 0.09. "
+                     "Var(aX + bY) = a² Var X + b² Var Y + 2ab Cov(X, Y).")
+    gs = grid(fig, wspace=0.3)
+    ax = fig.add_subplot(gs[0, :2])
+    for (c, color), v in zip(cs, half):
+        ax.plot(w, w ** 2 * var_a + (1 - w) ** 2 * var_b + 2 * w * (1 - w) * c, color=color,
+                linewidth=2.3, label=f"Cov = {c:+.2f}")
+        ax.plot(0.5, v, "o", color=color, markersize=9, zorder=3)
+        ax.annotate(f"{v:.4f}", (0.5, v), xytext=(10, 4), textcoords="offset points", fontsize=10.5,
+                    color=color)
+    ax.axvline(0.5, color=MUTED, linestyle=":", linewidth=1.2)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 0.1)
+    ax.set_xlabel("a = share of asset A (variance 0.04); the rest in asset B (variance 0.09)")
+    ax.set_ylabel("portfolio variance")
+    ax.set_title("Portfolio variance for every mix; dots mark the 50/50 portfolio")
+    ax.grid(True)
+    ax.legend(loc="upper right", fontsize=10)
+
+    ax = fig.add_subplot(gs[0, 2])
+    values = [var_a, var_b] + half
+    labels = ["A only", "B only", "Cov +0.05", "Cov 0", "Cov −0.05"]
+    ax.bar(range(5), values, color=[BLUE_LIGHT, BLUE_LIGHT] + [c for _, c in cs], width=0.62, zorder=2)
+    for p, v in enumerate(values):
+        ax.text(p, v + 0.0015, f"{v:.4f}", ha="center", va="bottom", fontsize=9.5)
+    ax.set_xticks(range(5), labels, fontsize=9.5, rotation=20)
+    ax.set_ylim(0, 0.1)
+    ax.set_ylabel("variance")
+    ax.set_title("Single assets vs 50/50 mixes")
+    ax.grid(axis="y", zorder=0)
+
+    panel(fig.add_subplot(gs[1, :2]), "The 50/50 portfolio", [
+        r"$\mathrm{Var}(\frac{1}{2}X + \frac{1}{2}Y) = \frac{1}{4}(0.04) + \frac{1}{4}(0.09) + \frac{1}{2}\,c = 0.0325 + \frac{1}{2}\,c$",
+        "",
+        "",
+        f"`Cov = +0.05:  0.0325 + 0.025 = {half[0]:.4f}`",
+        f"`Cov =  0.00:  0.0325 + 0     = {half[1]:.4f}`",
+        f"`Cov = -0.05:  0.0325 - 0.025 = {half[2]:.4f}`",
+        "",
+        "The variances fix the baseline; the covariance term moves the result up or down.",
+    ], spacing=0.1)
+    panel(fig.add_subplot(gs[1, 2]), "A diversifier's dream", [
+        "Negative covariance: when one asset",
+        "falls, the other tends to rise, and",
+        "the swings cancel.",
+        "",
+        "The 50/50 mix with Cov = −0.05 has",
+        "variance 0.0075, less than either",
+        "asset alone (0.04 and 0.09).",
+    ], spacing=0.09)
+    save(fig, name="08_ex6_portfolio_variance.png")
+
+
+# ================================================================ notebook 09
+def fig_09_ex4():
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal(500_000)
+    noise_levels = [0, 0.5, 1, 2, 5]
+    ys = {}
+    for s in noise_levels:
+        ys[s] = x + s * rng.standard_normal(500_000)
+    rho_sim = np.array([pop_corr(x, ys[s]) for s in noise_levels])
+    rho_theory = 1 / np.sqrt(1 + np.array(noise_levels) ** 2)
+    assert np.allclose(rho_sim, rho_theory, atol=0.005)
+
+    fig = new_figure("Exercise 4: noise dilutes correlation",
+                     "Y = X + ε with X ~ N(0, 1) and independent noise ε ~ N(0, s²). "
+                     "Scatter plots show 3,000 of the 500,000 points.")
+    gs = grid(fig, wspace=0.3)
+    for col, s in enumerate([0.5, 1, 2]):
+        ax = fig.add_subplot(gs[0, col])
+        ax.scatter(x[:3000], ys[s][:3000], s=5, color=BLUE, alpha=0.35, linewidths=0)
+        ax.plot([-4, 4], [-4, 4], color=ORANGE, linewidth=1.5, linestyle="--")
+        ax.set_xlim(-4, 4)
+        ax.set_ylim(-9, 9)
+        ax.set_title(f"s = {s:g}:  ρ = {rho_sim[noise_levels.index(s)]:.3f}")
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y = X + ε")
+        ax.grid(True)
+
+    ax = fig.add_subplot(gs[1, :2])
+    curve = np.linspace(0, 5.5, 200)
+    ax.plot(curve, 1 / np.sqrt(1 + curve ** 2), color=BLUE, linewidth=2.3, label="theory 1/√(1 + s²)")
+    ax.plot(noise_levels, rho_sim, "o", color=ORANGE, markersize=9, zorder=3, label="simulated")
+    for s, r in zip(noise_levels, rho_sim):
+        ax.annotate(f"{r:.3f}", (s, r), xytext=(8, 6), textcoords="offset points", fontsize=10.5)
+    ax.set_xlim(-0.1, 5.6)
+    ax.set_ylim(0, 1.12)
+    ax.set_xlabel("s = noise standard deviation")
+    ax.set_ylabel("ρ(X, Y)")
+    ax.set_title("Correlation falls as the noise grows")
+    ax.grid(True)
+    ax.legend(loc="upper right", fontsize=10)
+
+    panel(fig.add_subplot(gs[1, 2]), "Where 1/√(1 + s²) comes from", [
+        r"$\mathrm{Cov}(X, X + \epsilon) = \mathrm{Var}(X) = 1$",
+        r"$\mathrm{Var}(Y) = 1 + s^2$",
+        "",
+        r"$\rho = \dfrac{1}{1 \cdot \sqrt{1 + s^2}}$",
+        "",
+        "",
+        "The signal X never changes; the noise",
+        "only widens the cloud around the line.",
+    ], spacing=0.1)
+    save(fig, name="09_ex4_noise_dilutes_correlation.png")
+
+
+def fig_09_ex5():
+    x_par = np.array([-2, -1, 0, 1, 2], dtype=float)
+    rho_par = pop_corr(x_par, x_par ** 2)
+    rng = np.random.default_rng(0)
+    n = 30_000
+    kid_age = rng.uniform(6, 12, n)
+    shoe = 0.9 * kid_age + rng.normal(0, 0.6, n)
+    reading = 10 * kid_age + rng.normal(0, 8, n)
+    in_group = (kid_age > 8.9) & (kid_age < 9.1)
+    rho_all = pop_corr(shoe, reading)
+    rho_group = pop_corr(shoe[in_group], reading[in_group])
+    assert abs(rho_par) < 1e-12 and rho_all > 0.8 and abs(rho_group) < 0.15
+
+    fig = new_figure("Exercise 5: two cautions about correlation",
+                     "(a) ρ = 0 does not mean unrelated.   (b) A strong ρ does not mean one variable causes the other.")
+    gs = grid(fig, wspace=0.3)
+    ax = fig.add_subplot(gs[0, 0])
+    curve = np.linspace(-2.3, 2.3, 200)
+    ax.plot(curve, curve ** 2, color=MUTED, linewidth=1.2)
+    ax.scatter(x_par, x_par ** 2, s=80, color=BLUE, zorder=3)
+    ax.set_title(f"(a) y = x²:  ρ = {abs(rho_par):.3f}")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.grid(True)
+
+    sample = rng.choice(n, size=4000, replace=False)
+    ax = fig.add_subplot(gs[0, 1])
+    ax.scatter(shoe[sample], reading[sample], s=5, color=BLUE, alpha=0.3, linewidths=0, label="all children")
+    ax.scatter(shoe[in_group], reading[in_group], s=9, color=ORANGE, alpha=0.8, linewidths=0,
+               label=f"age 8.9–9.1 (n = {in_group.sum()})")
+    ax.set_title(f"(b) all ages:  ρ = {rho_all:.3f}")
+    ax.set_xlabel("shoe size")
+    ax.set_ylabel("reading score")
+    ax.grid(True)
+    ax.legend(loc="upper left", fontsize=10, markerscale=2.5)
+
+    ax = fig.add_subplot(gs[0, 2])
+    ax.scatter(shoe[in_group], reading[in_group], s=14, color=ORANGE, alpha=0.8, linewidths=0)
+    ax.set_title(f"(b) 9-year-olds only:  ρ = {rho_group:.3f}")
+    ax.set_xlabel("shoe size")
+    ax.set_ylabel("reading score")
+    ax.grid(True)
+
+    panel(fig.add_subplot(gs[1, 0]), "(a) Nonlinearity", [
+        "y is fully determined by x, but the",
+        "U shape is symmetric: the rising and",
+        "falling halves cancel, so ρ = 0.",
+        "",
+        "ρ measures how close the points are",
+        "to a line, not dependence in general.",
+    ], spacing=0.09)
+    panel(fig.add_subplot(gs[1, 1]), "(b) A common cause", [
+        "In the simulation, age drives both:",
+        "shoe = 0.9 · age + noise,",
+        "reading = 10 · age + noise.",
+        "",
+        "Across all ages both rise together",
+        f"(ρ = {rho_all:.2f}). Hold age fixed and the",
+        f"link disappears (ρ = {rho_group:.2f}).",
+    ], spacing=0.09)
+    panel(fig.add_subplot(gs[1, 2]), "Key takeaways", [
+        "ρ = 0: no linear trend, but there may",
+        "still be a strong curved one.",
+        "",
+        "Large ρ: the variables move together,",
+        "possibly because a third variable",
+        "moves both. Correlation is not",
+        "causation.",
+    ], spacing=0.09)
+    save(fig, name="09_ex5_correlation_cautions.png")
+
+
+# ================================================================ notebook 10
+MU_HW = np.array([67.0, 150.0])
+SIGMA_H, SIGMA_W, RHO_HW = 3.0, 20.0, 0.75
+SIGMA_DEP = np.array([[SIGMA_H ** 2, RHO_HW * SIGMA_H * SIGMA_W],
+                      [RHO_HW * SIGMA_H * SIGMA_W, SIGMA_W ** 2]])
+
+
+def normal_pdf(x, m, s):
+    return np.exp(-0.5 * ((x - m) / s) ** 2) / (s * np.sqrt(2 * np.pi))
+
+
+def bivariate_pdf(xg, yg, mu, sigma):
+    inv = np.linalg.inv(sigma)
+    dx, dy = xg - mu[0], yg - mu[1]
+    quad = inv[0, 0] * dx ** 2 + 2 * inv[0, 1] * dx * dy + inv[1, 1] * dy ** 2
+    return np.exp(-0.5 * quad) / (2 * np.pi * np.sqrt(np.linalg.det(sigma)))
+
+
+def fig_10_ex5():
+    rng = np.random.default_rng(0)
+    cloud = rng.multivariate_normal(MU_HW, SIGMA_DEP, size=2_000_000)
+    in_slice = np.abs(cloud[:, 0] - 70) < 0.1
+    weights = cloud[in_slice, 1]
+    cond_mu = 150 + 0.75 * (20 / 3) * (70 - 67)
+    cond_sd = 20 * np.sqrt(1 - 0.75 ** 2)
+    assert abs(weights.mean() - cond_mu) < 0.5 and abs(weights.std() - cond_sd) < 0.5
+
+    fig = new_figure("Exercise 5: a slice of a bivariate Gaussian is Gaussian",
+                     "Height ~ N(67, 3²), weight ~ N(150, 20²), ρ = 0.75. "
+                     "Keep the people with height in [69.9, 70.1].")
+    gs = grid(fig, wspace=0.3)
+    ax = fig.add_subplot(gs[0, 0])
+    sample = cloud[:5000]
+    ax.scatter(sample[:, 0], sample[:, 1], s=4, color=BLUE, alpha=0.25, linewidths=0)
+    ax.axvspan(69.9, 70.1, color=ORANGE, alpha=0.6, zorder=3)
+    h = np.array([57, 77])
+    ax.plot(h, 150 + 5 * (h - 67), color=INK2, linestyle="--", linewidth=1.5,
+            label="E[weight | height] = 150 + 5(h − 67)")
+    ax.set_xlim(57, 77)
+    ax.set_ylim(70, 230)
+    ax.set_xlabel("height (in)")
+    ax.set_ylabel("weight (lb)")
+    ax.set_title("The cloud and the slice at h = 70")
+    ax.grid(True)
+    ax.legend(loc="upper left", fontsize=9.5)
+
+    ax = fig.add_subplot(gs[0, 1:])
+    grid_w = np.linspace(80, 220, 300)
+    ax.hist(weights, bins=60, density=True, color=BLUE_LIGHT, edgecolor=SURFACE, linewidth=0.8,
+            label=f"weights in the slice (n = {in_slice.sum():,})")
+    ax.plot(grid_w, normal_pdf(grid_w, cond_mu, cond_sd), color=BLUE, linewidth=2.5,
+            label=f"conditional N({cond_mu:.0f}, {cond_sd:.1f}²)")
+    ax.plot(grid_w, normal_pdf(grid_w, 150, 20), color=ORANGE, linewidth=2, linestyle="--",
+            label="marginal N(150, 20²)")
+    ax.set_xlim(80, 220)
+    ax.set_xlabel("weight (lb)")
+    ax.set_ylabel("density")
+    ax.set_title("Weights of the ~70-inch people: shifted up and narrower")
+    ax.grid(True)
+    ax.legend(loc="upper left", fontsize=10)
+
+    panel(fig.add_subplot(gs[1, :2]), "The conditional formulas", [
+        r"$\mu_{W|H=70} = \mu_W + \rho\,\dfrac{\sigma_W}{\sigma_H}\,(70 - \mu_H) = 150 + 0.75 \cdot \dfrac{20}{3} \cdot 3 = 165$",
+        "",
+        "",
+        r"$\sigma_{W|H=70} = \sigma_W \sqrt{1 - \rho^2} = 20\sqrt{1 - 0.5625} = 13.2$",
+        "",
+        "",
+        f"`slice: mean {weights.mean():.1f}, sd {weights.std():.1f}   theory: mean {cond_mu:.1f}, sd {cond_sd:.1f}`",
+    ], spacing=0.1)
+    panel(fig.add_subplot(gs[1, 2]), "What it shows", [
+        "Knowing someone is 70 inches tall",
+        "(1 sd above average) raises the",
+        "expected weight from 150 to 165.",
+        "",
+        "It also cuts the uncertainty by the",
+        "factor √(1 − ρ²) = 0.66: from 20 lb",
+        "to 13.2 lb.",
+    ], spacing=0.09)
+    save(fig, name="10_ex5_conditional_slice.png")
+
+
+def fig_10_ex6():
+    rhos = [0.0, 0.75, 0.95]
+    axis = np.linspace(-3, 3, 301)
+    xg, yg = np.meshgrid(axis, axis, indexing="ij")
+    densities = [bivariate_pdf(xg, yg, np.zeros(2), np.array([[1, r], [r, 1]])) for r in rhos]
+    peaks = [d.max() for d in densities]
+    assert np.allclose(peaks, [1 / (2 * np.pi * np.sqrt(1 - r ** 2)) for r in rhos], rtol=1e-3)
+
+    fig = new_figure("Exercise 6: the determinant as spread volume",
+                     "Σ = [[1, ρ], [ρ, 1]] has |Σ| = 1 − ρ². "
+                     "Same color scale in all three panels.")
+    gs = grid(fig, wspace=0.36, right=0.95)
+    vmax = max(peaks)
+    for col, (r, d) in enumerate(zip(rhos, densities)):
+        ax = fig.add_subplot(gs[0, col])
+        density_image(fig, ax, d, f"ρ = {r:g}:  |Σ| = {1 - r ** 2:.4f}", vmax=vmax,
+                      extent=(-3, 3, -3, 3))
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.text(-2.8, 2.8, f"peak {d.max():.3f}", va="top", fontsize=10.5, color=INK,
+                bbox=dict(facecolor="white", edgecolor="none", boxstyle="round,pad=0.25"))
+
+    ax = fig.add_subplot(gs[1, :2])
+    curve = np.linspace(-1, 1, 401)
+    ax.plot(curve, 1 - curve ** 2, color=BLUE, linewidth=2.5)
+    for r in rhos:
+        ax.plot(r, 1 - r ** 2, "o", color=ORANGE, markersize=9, zorder=3)
+        ax.annotate(f"ρ = {r:g}", (r, 1 - r ** 2), xytext=(8, 6), textcoords="offset points", fontsize=10.5)
+    ax.plot([-1, 1], [0, 0], "x", color=ORANGE, markersize=11, markeredgewidth=2.5)
+    ax.text(0, 0.06, "× marks |ρ| = 1: |Σ| = 0, Σ not invertible", ha="center", va="bottom",
+            fontsize=10.5, color=ORANGE)
+    ax.set_xlim(-1.05, 1.05)
+    ax.set_ylim(-0.05, 1.15)
+    ax.set_xlabel("ρ")
+    ax.set_ylabel("|Σ| = 1 − ρ²")
+    ax.set_title("Determinant against correlation")
+    ax.grid(True)
+
+    panel(fig.add_subplot(gs[1, 2]), "The two extremes", [
+        "ρ = 0: |Σ| = 1, the largest value.",
+        "A round bell, spread as widely",
+        "as the variances allow.",
+        "",
+        "|ρ| → 1: the bell squeezes onto the",
+        "line y = ±x. The peak 1/(2π√|Σ|)",
+        "shoots up, and at |ρ| = 1 the formula",
+        "divides by zero: Σ⁻¹ does not exist.",
+    ], spacing=0.09)
+    save(fig, name="10_ex6_determinant_spread.png")
+
+
 if __name__ == "__main__":
     wait, rate = load_call_center()
     fig_03_ex3()
@@ -723,3 +1521,15 @@ if __name__ == "__main__":
     fig_05_ex3()
     fig_05_ex4()
     fig_05_ex5()
+    fig_01_ex6()
+    fig_02_ex5()
+    fig_06_ex4()
+    fig_06_ex5()
+    fig_07_ex5()
+    fig_07_ex6()
+    fig_08_ex5()
+    fig_08_ex6()
+    fig_09_ex4()
+    fig_09_ex5()
+    fig_10_ex5()
+    fig_10_ex6()

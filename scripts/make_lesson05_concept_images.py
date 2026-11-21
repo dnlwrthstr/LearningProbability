@@ -523,6 +523,132 @@ def sheet_06_mle_to_map():
     save(fig, name="06_mle_to_map.png")
 
 
+# ================================================================ notebook 07
+def sheet_07_frequentist_vs_bayesian():
+    heads, n = 8, 10
+    strong, weak = 100, 2
+
+    def bayes_answer(a, k, flips):
+        return (a + k) / (2 * a + flips)
+
+    frequentist = heads / n
+    assert round(bayes_answer(strong, heads, n), 3) == 0.514 and round(bayes_answer(weak, heads, n), 2) == 0.71
+
+    # the notebook's convergence run (seed 0) and tournament (seed 1)
+    rng = np.random.default_rng(0)
+    flips = rng.random(10_000) < 0.8
+    ks = np.cumsum(flips)
+    ns = np.arange(1, 10_001)
+    freq_est = ks / ns
+    bayes_est = (strong + ks) / (2 * strong + ns)
+
+    rng = np.random.default_rng(1)
+
+    def tournament(coin_sampler, trials=100_000, n_flips=10):
+        ps = coin_sampler(trials)
+        k = rng.binomial(n_flips, ps)
+        return np.mean((k / n_flips - ps) ** 2), np.mean(((strong + k) / (2 * strong + n_flips) - ps) ** 2)
+
+    fair_mse = tournament(lambda t: np.clip(rng.normal(0.5, 0.03, t), 0.01, 0.99))
+    wild_mse = tournament(lambda t: rng.uniform(0.05, 0.95, t))
+    assert fair_mse[1] < fair_mse[0] and wild_mse[0] < wild_mse[1]
+
+    fig = new_figure("Frequentist vs. Bayesian: same 10 flips, two answers",
+                     "A coin found in the street shows 8 heads in 10 tosses. One camp uses only the evidence, "
+                     "the other updates a prior belief that coins are fair.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, 0])
+    ax.plot(P, belief(0, heads, n - heads), color=BLUE, linewidth=2.4, label="frequentist: likelihood of 8H 2T")
+    ax.plot(P, belief(strong, 0, 0), color=MUTED, linewidth=1.8, linestyle="--", label="Bayesian prior (a = 100)")
+    ax.plot(P, belief(strong, heads, n - heads), color=ORANGE, linewidth=2.4, label="Bayesian updated belief")
+    ax.axvline(frequentist, color=BLUE, linestyle=":", linewidth=1.3)
+    ax.axvline(bayes_answer(strong, heads, n), color=ORANGE, linestyle=":", linewidth=1.3)
+    ax.text(frequentist + 0.015, 1.08, "0.8", color=BLUE, fontsize=11, weight="bold")
+    ax.text(bayes_answer(strong, heads, n) + 0.015, 1.08, f"{bayes_answer(strong, heads, n):.3f}",
+            color=ORANGE, fontsize=11, weight="bold")
+    ax.set_ylim(0, 1.45)
+    ax.set_xlabel("heads probability p")
+    ax.set_ylabel("curve (peak = 1)")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True)
+    ax.set_title("The bar story")
+
+    ax = fig.add_subplot(gs[0, 1])
+    strengths = np.array([0, 1, 2, 5, 10, 30, 100, 300])
+    answers = bayes_answer(strengths, heads, n)
+    ax.plot(strengths, answers, "o-", color=BLUE, linewidth=2.2, markersize=7, zorder=3)
+    for a, color in [(weak, AQUA), (strong, ORANGE)]:
+        ax.plot(a, bayes_answer(a, heads, n), "o", color=color, markersize=11, zorder=4)
+    ax.annotate(f"weak prior a = 2: {bayes_answer(weak, heads, n):.2f}", (weak, bayes_answer(weak, heads, n)),
+                textcoords="offset points", xytext=(10, 6), fontsize=10, color=AQUA, weight="bold")
+    ax.annotate(f"strong prior a = 100: {bayes_answer(strong, heads, n):.3f}",
+                (strong, bayes_answer(strong, heads, n)), textcoords="offset points", xytext=(-12, -16),
+                ha="right", va="top", fontsize=10, color=ORANGE, weight="bold")
+    ax.axhline(0.8, color=MUTED, linestyle=":", linewidth=1.2)
+    ax.axhline(0.5, color=MUTED, linestyle=":", linewidth=1.2)
+    ax.text(450, 0.81, "frequentist 0.8", ha="right", va="bottom", fontsize=9.5, color=INK2)
+    ax.text(0, 0.505, "prior center 0.5", ha="left", va="bottom", fontsize=9.5, color=INK2)
+    ax.set_xscale("symlog", linthresh=1)
+    ax.set_xlim(-0.3, 450)
+    ax.set_ylim(0.45, 0.85)
+    ax.set_xlabel("prior strength a (0 = no prior)")
+    ax.set_ylabel("estimate after 8H 2T")
+    ax.grid(True)
+    ax.set_title("The prior-strength dial")
+
+    panel(fig.add_subplot(gs[0, 2]), "Two meanings of probability", [
+        "Frequentist: long-run frequency over",
+        "endless repetitions. No prior; find the",
+        "model that maximizes P(data | model).",
+        "",
+        "Bayesian: degree of belief. Start from a",
+        "prior P(model) and update it with data.",
+        "",
+        "Everything up to here (MLE included)",
+        "was frequentist.",
+    ], spacing=0.09)
+
+    ax = fig.add_subplot(gs[1, 0])
+    ax.semilogx(ns, freq_est, color=BLUE, linewidth=1.8, label="frequentist k/n")
+    ax.semilogx(ns, bayes_est, color=ORANGE, linewidth=2.2, label="Bayesian (a = 100)")
+    ax.axhline(0.8, color=INK, linestyle="--", linewidth=1, label="true p = 0.8")
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel("number of tosses (log scale)")
+    ax.set_ylabel("estimate of p")
+    ax.legend(loc="lower right", fontsize=9.5)
+    ax.grid(True)
+    ax.set_title(f"The camps converge: {freq_est[-1]:.3f} vs {bayes_est[-1]:.3f} at 10,000")
+
+    ax = fig.add_subplot(gs[1, 1])
+    pos = np.arange(2)
+    for offset, idx, color, label in [(-0.2, 0, BLUE, "frequentist"), (0.2, 1, ORANGE, "Bayesian (a = 100)")]:
+        values = [fair_mse[idx], wild_mse[idx]]
+        ax.bar(pos + offset, values, width=0.36, color=color, label=label, zorder=2)
+        for p, v in zip(pos, values):
+            ax.text(p + offset, v + 0.0006, f"{v:.4f}", ha="center", va="bottom", fontsize=10)
+    ax.set_xticks(pos, ["fair-ish coins\n(prior is right)", "wild coins\n(prior is wrong)"])
+    ax.set_ylim(0, max(wild_mse) * 1.25)
+    ax.set_ylabel("mean squared error, 10 tosses")
+    ax.legend(loc="upper left", fontsize=9.5)
+    ax.grid(axis="y", zorder=0)
+    ax.set_title("Small n: a good prior helps, a wrong one hurts")
+
+    w_prior = 2 * strong / (2 * strong + n)
+    panel(fig.add_subplot(gs[1, 2]), "Priors as phantom flips", [
+        r"$\hat{p}_{\mathrm{Bayes}} = \dfrac{a + k}{2a + n}$",
+        "",
+        "",
+        "= weighted average of 0.5 and k/n,",
+        f"weights {w_prior:.3f} and {1 - w_prior:.3f} for a = 100, n = 10.",
+        "",
+        "a = 100 means 200 fair flips already seen,",
+        "so 10 real ones barely move the belief.",
+        "Priors are initial conditions, not destinies.",
+    ], spacing=0.085)
+    save(fig, name="07_frequentist_vs_bayesian.png")
+
+
 # ================================================================ notebook 08
 BAYESIANS = [("conservative", 1500, ORANGE), ("moderate", 9, BLUE), ("agnostic (flat)", 0, AQUA)]
 
@@ -679,6 +805,109 @@ def sheet_09_bayesian_updating():
     save(fig, name="09_bayesian_updating.png")
 
 
+# ================================================================ notebook 10
+def sheet_10_bayesian_worked_example():
+    theta = np.linspace(0.001, 0.999, 999)          # the notebook's grid
+
+    def density(heads, tails):
+        curve = theta ** heads * (1 - theta) ** tails
+        return curve / trapezoid(curve, theta)
+
+    def map_of(curve):
+        return theta[np.argmax(curve)]
+
+    uniform = density(0, 0)
+    post_10 = density(8, 2)
+    post_20 = density(14, 6)
+    batch_2 = density(6, 4)
+    assert round(map_of(post_10), 2) == 0.8 and round(map_of(post_20), 2) == 0.7 and round(map_of(batch_2), 2) == 0.6
+    assert abs(post_10.max() - 495 * 0.8 ** 8 * 0.2 ** 2) < 0.01
+
+    fig = new_figure("A complete Bayesian worked example: flat prior to firm belief",
+                     "A mystery coin: first 8 heads and 2 tails, then 6 heads and 4 tails. "
+                     "Each posterior becomes the next prior.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, 0])
+    for curve, label, color in [(uniform, "uniform prior: flat, no peak", MUTED),
+                                (post_10, "after 10 flips: 495 θ⁸(1 − θ)²", BLUE),
+                                (post_20, "after 20 flips: ∝ θ¹⁴(1 − θ)⁶", ORANGE)]:
+        ax.plot(theta, curve, color=color, linewidth=2.3, label=label)
+        ax.fill_between(theta, curve, color=color, alpha=0.12)
+    for curve, color in [(post_10, BLUE), (post_20, ORANGE)]:
+        m = map_of(curve)
+        ax.plot(m, curve.max(), "o", color=color, markersize=8, zorder=3)
+        ax.text(m, curve.max() + 0.12, f"MAP {m:.1f}", ha="center", fontsize=10.5, color=color, weight="bold")
+    ax.set_ylim(0, 5.2)
+    ax.set_xlabel("θ (heads probability)")
+    ax.set_ylabel("posterior density")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True)
+    ax.set_title("Flat → peak at 0.8 → sharper peak at 0.7")
+
+    ax = fig.add_subplot(gs[0, 1])
+    for curve, label, color, style in [(batch_2, "batch 2 alone (6H 4T): 0.6", AQUA, "-"),
+                                       (post_10, "prior = batch-1 posterior: 0.8", BLUE, "--"),
+                                       (post_20, "posterior (product): 0.7", ORANGE, "-")]:
+        ax.plot(theta, curve, color=color, linewidth=2.3, linestyle=style, label=label)
+        ax.axvline(map_of(curve), color=color, linestyle=":", linewidth=1.2)
+    ax.set_ylim(0, 5.2)
+    ax.set_xlabel("θ (heads probability)")
+    ax.set_ylabel("density")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True)
+    ax.set_title("The prior pulls batch 2's 0.6 up to 0.7")
+
+    panel(fig.add_subplot(gs[0, 2]), "The recipe", [
+        "posterior ∝ likelihood × prior",
+        "Batch 1:  θ⁸(1 − θ)² × 1",
+        "Batch 2:  θ⁶(1 − θ)⁴ × θ⁸(1 − θ)² = θ¹⁴(1 − θ)⁶",
+        "",
+        "Exponents add, so MAP = heads / flips:",
+        "8/10 = 0.8, then 14/20 = 0.7.",
+        "",
+        "The constant 495 = 11!/(8! 2!) rescales the",
+        "curve but never moves its peak.",
+    ], spacing=0.09)
+
+    # the notebook's 'data waters down the prior' run (seed 42, 400 flips)
+    rng = np.random.default_rng(42)
+    stream = (rng.random(400) < 0.8).astype(int)
+    h = np.cumsum(stream)
+    t = np.arange(1, 401) - h
+    log_t, log_1t = np.log(theta), np.log(1 - theta)
+    ax = fig.add_subplot(gs[1, :2])
+    finals = []
+    for (label, a, b), color in zip([("flat prior (MAP = MLE here)", 0, 0), ("mildly wrong prior ∝ θ⁹(1 − θ)⁹", 9, 9),
+                                     ("badly wrong prior ∝ θ²(1 − θ)¹⁸", 2, 18)], [MUTED, BLUE, ORANGE]):
+        traj = theta[np.argmax((a + h)[:, None] * log_t + (b + t)[:, None] * log_1t, axis=1)]
+        finals.append(traj[-1])
+        ax.plot(np.arange(1, 401), traj, color=color, linewidth=2.2, label=label)
+    ax.plot(np.arange(1, 401), h / np.arange(1, 401), color=INK, linewidth=1, linestyle="--",
+            label="MLE (running share of heads)")
+    ax.axhline(0.8, color=INK, linestyle=":", linewidth=1, label="true θ = 0.8")
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel("number of flips observed")
+    ax.set_ylabel("MAP estimate of θ")
+    ax.legend(loc="lower right", fontsize=9.5)
+    ax.grid(True)
+    ax.set_title(f"Data waters down the prior: after 400 flips all three MAPs are within "
+                 f"{max(finals) - min(finals):.2f} of each other")
+
+    panel(fig.add_subplot(gs[1, 2]), "What the example proves", [
+        "Flat prior ⇒ MAP = MLE: a constant",
+        "never moves an argmax.",
+        "",
+        "Chunking doesn't matter: one update of",
+        "20 flips, two of 10, or 20 of one all",
+        "end at θ¹⁴(1 − θ)⁶.",
+        "",
+        "Priors matter most with little data,",
+        "and wrong priors cost many flips to undo.",
+    ], spacing=0.09)
+    save(fig, name="10_bayesian_worked_example.png")
+
+
 # ================================================================ notebook 11
 def sheet_11_map_regularization():
     rng = np.random.default_rng(3)
@@ -794,6 +1023,8 @@ if __name__ == "__main__":
     sheet_04_mle_regression()
     sheet_05_regularization()
     sheet_06_mle_to_map()
+    sheet_07_frequentist_vs_bayesian()
     sheet_08_map()
     sheet_09_bayesian_updating()
+    sheet_10_bayesian_worked_example()
     sheet_11_map_regularization()

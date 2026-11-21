@@ -78,6 +78,604 @@ def bayes(prior, p_evidence_given_a, p_evidence_given_not_a):
     return numerator / (numerator + (1 - prior) * p_evidence_given_not_a)
 
 
+# ================================================================ shared bits for notebooks 01-08, 13
+TWO_DICE = list(product(range(1, 7), repeat=2))
+
+
+def tiles(ax, labels, colors, columns, title, faded=(), fontsize=12, gap=0.1):
+    """Outcome tiles in a grid, one colored square per outcome; faded indices drawn pale."""
+    rows = (len(labels) + columns - 1) // columns
+    for k, (label, color) in enumerate(zip(labels, colors)):
+        r, c = divmod(k, columns)
+        alpha = 0.22 if k in faded else 1.0
+        ax.add_patch(Rectangle((c, -r), 1 - gap, 1 - gap, facecolor=color, alpha=alpha, linewidth=0))
+        dark = color in (BLUE, ORANGE, AQUA) and k not in faded
+        ax.text(c + (1 - gap) / 2, -r + (1 - gap) / 2, label, ha="center", va="center",
+                fontsize=fontsize, color="white" if dark else INK, alpha=0.45 if k in faded else 1.0,
+                weight="bold" if dark else "normal")
+    ax.set_xlim(-0.1, columns)
+    ax.set_ylim(-rows + 1 - 0.1, 1.0)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title(title, pad=8)
+
+
+def dice_grid(ax, color_of, title, faded=lambda pair: False, labels=False):
+    """6 x 6 table of two-dice outcomes: rows = first die (1 on top), columns = second die."""
+    for first, second in TWO_DICE:
+        pair = (first, second)
+        fade = faded(pair)
+        ax.add_patch(Rectangle((second - 1, 6 - first), 1, 1, facecolor=color_of(pair),
+                               alpha=0.25 if fade else 1.0, edgecolor=SURFACE, linewidth=2))
+        if labels:
+            ax.text(second - 0.5, 6 - first + 0.5, f"{first},{second}", ha="center", va="center",
+                    fontsize=9, color=INK, alpha=0.4 if fade else 1.0)
+    ax.set_xlim(0, 6)
+    ax.set_ylim(0, 6)
+    ax.set_aspect("equal")
+    ax.set_xticks(np.arange(6) + 0.5, range(1, 7))
+    ax.set_yticks(np.arange(6) + 0.5, range(6, 0, -1))
+    ax.tick_params(length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_xlabel("second die")
+    ax.set_ylabel("first die")
+    ax.set_title(title, pad=8)
+
+
+def legend_below(ax, entries, y=-0.13):
+    handles = [Rectangle((0, 0), 1, 1, color=color) for _, color in entries]
+    ax.legend(handles, [name for name, _ in entries], loc="upper center", bbox_to_anchor=(0.5, y),
+              ncol=len(entries), fontsize=9.5, handlelength=1, columnspacing=0.8)
+
+
+def sample_space_box(ax, title):
+    ax.add_patch(Rectangle((0, 0), 10, 6.4, facecolor=CARD, edgecolor=MUTED))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 6.4)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title(title, pad=8)
+
+
+# ================================================================ notebook 01
+def sheet_01_what_is_probability():
+    total_kids, soccer = 10, 3
+    rng = np.random.default_rng(seed=42)
+    first_run = rng.integers(0, 2, size=(100_000, 2))
+    estimate = np.all(first_run == 1, axis=1).mean()
+    assert round(estimate, 4) == 0.2509
+    flips = rng.integers(0, 2, size=(10_000, 2))
+    running = np.cumsum(np.all(flips == 1, axis=1)) / np.arange(1, 10_001)
+
+    fig = new_figure("What is probability? Count the favorable outcomes, divide by all outcomes",
+                     "P(E) = |E| / |S| when every outcome is equally likely. "
+                     "The event E is a subset of the sample space S.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, 0])
+    sample_space_box(ax, f"P(soccer) = {soccer}/{total_kids} = {soccer / total_kids:.1f}")
+    ax.add_patch(Circle((2.6, 3.0), 2.0, facecolor=BLUE, alpha=0.15, edgecolor=BLUE, linewidth=2))
+    for x, y in [(1.9, 3.5), (3.3, 3.5), (2.6, 2.3)]:
+        ax.add_patch(Circle((x, y), 0.4, color=ORANGE))
+    for x, y in [(5.7, 4.2), (7.1, 4.2), (8.5, 4.2), (5.7, 2.8), (7.1, 2.8), (8.5, 2.8), (7.1, 1.4)]:
+        ax.add_patch(Circle((x, y), 0.4, color=BLUE_LIGHT))
+    ax.text(0.25, 6.0, f"sample space S: all {total_kids} kids", fontsize=11, va="top", color=INK2)
+    ax.text(2.6, 0.55, f"event E: {soccer} play soccer", ha="center", fontsize=11, color=ORANGE,
+            weight="bold")
+    ax.text(7.1, 0.55, f"{total_kids - soccer} don't", ha="center", fontsize=11, color=INK2)
+
+    ax = fig.add_subplot(gs[0, 1])
+    for i, n in enumerate([1, 2, 3]):
+        outcomes = ["".join(o) for o in product("HT", repeat=n)]
+        for k, o in enumerate(outcomes):
+            hot = o == "H" * n
+            ax.add_patch(Rectangle((k, -i * 1.5), 0.9, 0.9, facecolor=ORANGE if hot else BLUE_LIGHT,
+                                   linewidth=0))
+            ax.text(k + 0.45, -i * 1.5 + 0.45, o, ha="center", va="center", fontsize=10,
+                    color="white" if hot else INK, weight="bold" if hot else "normal")
+    ax.set_xlim(-0.1, 8)
+    ax.set_ylim(-3.2, 1.0)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([0.45, -1.05, -2.55], ["1 coin\nP = 1/2", "2 coins\nP = 1/4", "3 coins\nP = 1/8"])
+    ax.tick_params(length=0, labelsize=10.5)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_title("Each coin doubles |S|; all heads stays 1 outcome", pad=8)
+
+    panel(fig.add_subplot(gs[0, 2]), "The vocabulary", [
+        "Experiment: a process with an uncertain",
+        "    result (flip a coin, pick a kid)",
+        "Outcome: one possible result, e.g. H",
+        "Sample space S: all outcomes, {H, T}",
+        "Event E: the outcomes you care about",
+        "",
+        "P(E) = favorable / total = |E| / |S|",
+        "Always from 0 (impossible) to 1 (certain);",
+        "3/10 = 0.3 = 30% are the same number.",
+    ], spacing=0.09)
+
+    n = np.arange(1, 7)
+    bars(fig.add_subplot(gs[1, 0]), [f"{k}\n|S|={2 ** k}" for k in n], 0.5 ** n,
+         "P(all heads) with n coins = 1 / 2ⁿ", "", ylim=0.6,
+         label_fmt=lambda v: f"1/{round(1 / v)}", highlight=1)
+
+    ax = fig.add_subplot(gs[1, 1])
+    trials = np.arange(1, 10_001)
+    ax.semilogx(trials, running, color=BLUE, linewidth=1.8)
+    ax.axhline(0.25, color=ORANGE, linestyle="--", linewidth=1.6)
+    ax.text(1.3, 0.28, "theory: 1/4", color=ORANGE, fontsize=10.5, weight="bold")
+    ax.annotate(f"after 10,000: {running[-1]:.4f}", (10_000, running[-1]), textcoords="offset points",
+                xytext=(-6, 22), ha="right", fontsize=10.5)
+    ax.set_ylim(0, 1.02)
+    ax.set_xlabel("number of trials (log scale)")
+    ax.set_ylabel("frequency of HH")
+    ax.grid(True)
+    ax.set_title("Simulated frequency of HH settles at 1/4")
+
+    panel(fig.add_subplot(gs[1, 2]), "Key values", [
+        "`event          favorable/total   P`",
+        "`soccer kid          3/10       0.3`",
+        "`H, 1 coin           1/2        0.5`",
+        "`HH, 2 coins         1/4        0.25`",
+        "`HHH, 3 coins        1/8        0.125`",
+        "`5 heads, 5 coins    1/32       0.031`",
+        "",
+        f"Simulation, 100,000 pairs: P(HH) ≈ {estimate:.4f}",
+        "Frequencies converge to probabilities.",
+    ], spacing=0.09)
+    save(fig, name="01_what_is_probability.png")
+
+
+# ================================================================ notebook 02
+def sheet_02_dice_example():
+    rng = np.random.default_rng(seed=42)
+    n_rolls = 10_000
+    rolls = rng.integers(1, 7, size=n_rolls)
+    faces, counts = np.unique(rolls, return_counts=True)
+    frequencies = counts / n_rolls
+    assert [round(f, 4) for f in frequencies] == [0.1681, 0.1718, 0.1662, 0.1671, 0.1643, 0.1625]
+    running_six = np.cumsum(rolls == 6) / np.arange(1, n_rolls + 1)
+    doubles = sum(1 for a, b in TWO_DICE if a == b)
+    sum7 = sum(1 for a, b in TWO_DICE if a + b == 7)
+    assert (len(TWO_DICE), doubles, sum7) == (36, 6, 6)
+
+    fig = new_figure("Rolling dice: equally likely outcomes, counted on a grid",
+                     "One die has 6 outcomes, two dice have 6 × 6 = 36. "
+                     "Over many rolls, frequencies settle at the probabilities.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    tiles(fig.add_subplot(gs[0, 0]), [str(k) for k in range(1, 7)], [BLUE_LIGHT] * 5 + [ORANGE], 3,
+          "One die: |S| = 6, P(6) = 1/6", fontsize=20)
+
+    dice_grid(fig.add_subplot(gs[0, 1]), lambda p: ORANGE if p == (6, 6) else BLUE_LIGHT,
+              "Two dice: |S| = 36, P(6,6) = 1/36", labels=True)
+
+    panel(fig.add_subplot(gs[0, 2]), "Counting on the grid", [
+        "P(E) = |E| / |S|, with every cell equally likely.",
+        "",
+        "`one die    P(6)        = 1/6  ≈ 0.167`",
+        "`two dice   P(6,6)      = 1/36 ≈ 0.028`",
+        f"`two dice   P(double)   = {doubles}/36 ≈ 0.167`",
+        f"`two dice   P(sum = 7)  = {sum7}/36 ≈ 0.167`",
+        "`3 dice     P(6,6,6)    = 1/216`",
+        "",
+        "Repeating an experiment multiplies |S|:",
+        "6 → 36 → 216, just like coins 2 → 4 → 8.",
+    ], spacing=0.085)
+
+    ax = fig.add_subplot(gs[1, 0])
+    bars(ax, [str(f) for f in faces], frequencies, f"Frequencies after {n_rolls:,} rolls", "die face",
+         ylabel="frequency", ylim=0.24, label_fmt=lambda v: f"{v:.3f}")
+    ax.axhline(1 / 6, color=ORANGE, linestyle="--", linewidth=1.6, zorder=3)
+    ax.text(5.45, 1 / 6 + 0.035, "1/6 ≈ 0.167", ha="right", color=ORANGE, fontsize=10.5, weight="bold")
+
+    ax = fig.add_subplot(gs[1, 1])
+    ax.semilogx(np.arange(1, n_rolls + 1), running_six, color=BLUE, linewidth=1.8)
+    ax.axhline(1 / 6, color=ORANGE, linestyle="--", linewidth=1.6)
+    ax.text(1.3, 0.21, "theory: 1/6", color=ORANGE, fontsize=10.5, weight="bold")
+    ax.annotate(f"after {n_rolls:,}: {running_six[-1]:.4f}", (n_rolls, running_six[-1]),
+                textcoords="offset points", xytext=(-6, 22), ha="right", fontsize=10.5)
+    ax.set_ylim(0, 0.6)
+    ax.set_xlabel("number of rolls (log scale)")
+    ax.set_ylabel("frequency of a six")
+    ax.grid(True)
+    ax.set_title("The frequency of a six approaches 1/6")
+
+    panel(fig.add_subplot(gs[1, 2]), "Takeaways", [
+        "Fair die: six equally likely outcomes.",
+        "Two dice: ordered pairs, so (1,2) and (2,1)",
+        "are different cells of the 36.",
+        "",
+        "Few rolls: frequencies jump around.",
+        "Many rolls: every face lands near 1/6",
+        f"(here between {frequencies.min():.3f} and {frequencies.max():.3f}).",
+    ], spacing=0.09)
+    save(fig, name="02_dice_example.png")
+
+
+# ================================================================ notebook 03
+def sheet_03_complement_rule():
+    rng = np.random.default_rng(seed=42)
+    rolls = rng.integers(1, 7, size=100_000)
+    p_not_six_sim = (rolls != 6).mean()
+    assert round(p_not_six_sim, 4) == 0.8341
+    coins = ["".join(o) for o in product("HT", repeat=3)]
+    assert sum(o != "HHH" for o in coins) == 7
+    p_four = 1 - (5 / 6) ** 4
+    assert round(p_four, 4) == 0.5177
+
+    fig = new_figure("The complement rule: P(not A) = 1 − P(A)",
+                     "An event and its complement split the sample space, so their probabilities add to 1.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, 0])
+    ax.add_patch(Rectangle((0, 0), 10, 6.4, facecolor=ORANGE, alpha=0.22, edgecolor=MUTED))
+    ax.add_patch(Circle((3.0, 3.2), 2.1, facecolor=BLUE, edgecolor=SURFACE, linewidth=2))
+    ax.text(3.0, 3.2, "A: soccer\nP(A) = 0.3", ha="center", va="center", fontsize=12, color="white",
+            weight="bold")
+    ax.text(7.5, 3.2, "A': not soccer\nP(A') = 1 − 0.3\n= 0.7", ha="center", va="center", fontsize=12,
+            weight="bold")
+    ax.text(0.25, 6.05, "sample space: P = 1", fontsize=11, va="top", color=INK2)
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 6.4)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title("A' is everything outside A", pad=8)
+
+    ax = fig.add_subplot(gs[0, 1])
+    names = ["soccer\n(10 kids)", "three heads\n(3 coins)", "rolling a 6\n(1 die)"]
+    p_event = np.array([0.3, 1 / 8, 1 / 6])
+    labels_event, labels_comp = ["0.3", "1/8", "1/6"], ["0.7", "7/8", "5/6"]
+    positions = np.arange(3)
+    ax.bar(positions, p_event, width=0.6, color=BLUE, zorder=2)
+    ax.bar(positions, 1 - p_event, bottom=p_event, width=0.6, color=ORANGE, alpha=0.55, zorder=2)
+    for x, p, le, lc in zip(positions, p_event, labels_event, labels_comp):
+        ax.text(x, p / 2, f"P(A) = {le}", ha="center", va="center", color="white", fontsize=10,
+                weight="bold")
+        ax.text(x, p + (1 - p) / 2, f"P(A') = {lc}", ha="center", va="center", fontsize=10, weight="bold")
+    ax.axhline(1, color=INK, linewidth=1)
+    ax.set_xticks(positions, names)
+    ax.set_ylim(0, 1.08)
+    ax.set_ylabel("probability")
+    ax.grid(axis="y", zorder=0)
+    ax.set_title("P(A) + P(A') = 1 every time")
+
+    panel(fig.add_subplot(gs[0, 2]), "The rule", [
+        "A' (\"A prime\") = A does not happen.",
+        "Every outcome is in exactly one of A, A'.",
+        "",
+        "P(A) + P(A') = 1",
+        "P(A') = 1 − P(A)",
+        "",
+        "Use it when the event is awkward to count",
+        "but its complement is easy.",
+    ], spacing=0.09)
+
+    tiles(fig.add_subplot(gs[1, 0]), coins, [BLUE] + [ORANGE] * 7, 4,
+          "Not three heads: 7 of 8 outcomes = 1 − 1/8", fontsize=13)
+
+    n = np.arange(1, 11)
+    bars(fig.add_subplot(gs[1, 1]), [str(k) for k in n], 1 - (5 / 6) ** n,
+         "P(at least one six) = 1 − (5/6)ⁿ", "number of rolls n", ylim=1.0,
+         label_fmt=lambda v: f"{v:.2f}", highlight=3)
+
+    panel(fig.add_subplot(gs[1, 2]), "Rule vs. direct count", [
+        "`not soccer   7/10 = 1 − 3/10 = 0.7`",
+        "`not HHH      7/8  = 1 − 1/8  = 0.875`",
+        "`not a 6      5/6  = 1 − 1/6  = 0.8333`",
+        f"Simulated P(not 6), 100,000 rolls: {p_not_six_sim:.4f}",
+        "",
+        "\"At least one six in 4 rolls\" is hard to count;",
+        "its complement \"no six at all\" is (5/6)⁴, so",
+        f"P = 1 − (5/6)⁴ = {p_four:.4f} (orange bar).",
+    ], spacing=0.09)
+    save(fig, name="03_complement_rule.png")
+
+
+# ================================================================ notebook 04
+def sheet_04_sum_rule_disjoint():
+    sum7 = {d for d in TWO_DICE if sum(d) == 7}
+    sum10 = {d for d in TWO_DICE if sum(d) == 10}
+    diff1 = {d for d in TWO_DICE if abs(d[0] - d[1]) == 1}
+    diff2 = {d for d in TWO_DICE if abs(d[0] - d[1]) == 2}
+    assert not (sum7 & sum10) and not (diff1 & diff2)
+    assert (len(sum7), len(sum10), len(diff1), len(diff2)) == (6, 3, 10, 8)
+    rng = np.random.default_rng(seed=42)
+    sums = rng.integers(1, 7, size=(200_000, 2)).sum(axis=1)
+    simulated = ((sums == 7) | (sums == 10)).mean()
+    assert round(simulated, 4) == 0.2519
+
+    fig = new_figure("The sum rule for disjoint events: P(A ∪ B) = P(A) + P(B)",
+                     "If two events share no outcome, adding their probabilities counts every outcome once.")
+    gs = grid(fig, top=0.84, bottom=0.1, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, 0])
+    sample_space_box(ax, "Each kid plays only one sport")
+    ax.add_patch(Circle((2.8, 3.1), 1.75, facecolor=BLUE, alpha=0.3, edgecolor=BLUE, linewidth=2))
+    ax.add_patch(Circle((7.1, 3.1), 2.0, facecolor=ORANGE, alpha=0.3, edgecolor=ORANGE, linewidth=2))
+    ax.text(2.8, 3.1, "soccer\nP = 0.3", ha="center", va="center", fontsize=12, weight="bold")
+    ax.text(7.1, 3.1, "basketball\nP = 0.4", ha="center", va="center", fontsize=12, weight="bold")
+    ax.text(5.0, 0.35, "no overlap:  P(S ∪ B) = 0.3 + 0.4 = 0.7", ha="center", fontsize=11, color=INK2)
+
+    ax = fig.add_subplot(gs[0, 1])
+    tiles(ax, [str(k) for k in range(1, 7)],
+          [BLUE_LIGHT, BLUE, BLUE_LIGHT, BLUE, ORANGE, BLUE], 3,
+          "One die: even or five = 3/6 + 1/6 = 4/6", fontsize=20)
+    legend_below(ax, [("even {2, 4, 6}", BLUE), ("five {5}", ORANGE)], y=0.0)
+
+    panel(fig.add_subplot(gs[0, 2]), "The rule", [
+        "Disjoint (mutually exclusive): A and B",
+        "cannot happen in the same trial.",
+        "",
+        "Union A ∪ B = \"A or B\":",
+        "    P(A ∪ B) = P(A) + P(B)",
+        "",
+        "It works because no outcome is in both,",
+        "so none is counted twice.",
+    ], spacing=0.09)
+
+    colors = lambda pair, a, b: BLUE if pair in a else ORANGE if pair in b else "#eef3fa"
+    ax = fig.add_subplot(gs[1, 0])
+    dice_grid(ax, lambda p: colors(p, sum7, sum10), "Sum 7 or sum 10: 6/36 + 3/36 = 9/36")
+    legend_below(ax, [("sum 7 (6)", BLUE), ("sum 10 (3)", ORANGE)])
+    ax = fig.add_subplot(gs[1, 1])
+    dice_grid(ax, lambda p: colors(p, diff1, diff2), "Difference 1 or 2: 10/36 + 8/36 = 18/36")
+    legend_below(ax, [("difference 1 (10)", BLUE), ("difference 2 (8)", ORANGE)])
+
+    panel(fig.add_subplot(gs[1, 2]), "Check, and a warning", [
+        "`P(sum 7 or 10)   = 9/36  = 0.25`",
+        f"`simulated, 200,000 rolls: {simulated:.4f}`",
+        "`P(diff 1 or 2)   = 18/36 = 0.5`",
+        "",
+        "Odd {1, 3, 5} or five {5} are NOT disjoint:",
+        "3/6 + 1/6 = 4/6 counts the 5 twice;",
+        "the true answer is 3/6.",
+        "Overlapping events need a correction",
+        "(inclusion-exclusion, notebook 05).",
+    ], spacing=0.09)
+    save(fig, name="04_sum_rule_disjoint.png")
+
+
+# ================================================================ notebook 06
+def sheet_06_independence_product_rule():
+    rng = np.random.default_rng(seed=42)
+    kids = np.array([1] * 40 + [0] * 60)
+    fans_in_room1 = np.array([rng.permutation(kids)[:30].sum() for _ in range(10_000)])
+    assert round(fans_in_room1.mean(), 2) == 11.99
+    dice = rng.integers(1, 7, size=(500_000, 2))
+    simulated_66 = np.all(dice == 6, axis=1).mean()
+    assert round(simulated_66, 6) == 0.027930
+
+    fig = new_figure("Independence: when one event says nothing about the other, multiply",
+                     "Product rule for independent events: P(A ∩ B) = P(A) · P(B). "
+                     "\"And\" means intersection.")
+    gs = grid(fig, top=0.84, bottom=0.1, wspace=0.3)
+
+    mosaic(fig.add_subplot(gs[0, 0]), 0.4, 0.3, 0.3, ["soccer", "no soccer"], "room 1", "room 2",
+           "40% like soccer, 30% sit in room 1")
+
+    ax = fig.add_subplot(gs[0, 1])
+    values, counts = np.unique(fans_in_room1, return_counts=True)
+    ax.bar(values, counts, width=0.8, color=BLUE, zorder=2)
+    ax.axvline(12, color=ORANGE, linestyle="--", linewidth=1.8, zorder=3)
+    ax.text(16.5, counts.max() * 0.85, f"expected 0.4 × 30 = 12\naverage {fans_in_room1.mean():.2f}",
+            fontsize=10.5, color=ORANGE, weight="bold", va="top")
+    ax.set_xlabel("soccer fans in room 1 (30 kids)")
+    ax.set_ylabel("number of splits")
+    ax.set_ylim(0, counts.max() * 1.12)
+    ax.grid(axis="y", zorder=0)
+    ax.set_title("10,000 random room splits")
+
+    panel(fig.add_subplot(gs[0, 2]), "The rule", [
+        "Independent: knowing A happened does not",
+        "change the probability of B.",
+        "    coin tosses: independent",
+        "    chess moves: not independent",
+        "",
+        "P(A ∩ B) = P(A) · P(B)",
+        "P(soccer ∩ room 1) = 0.4 × 0.3 = 0.12",
+        "",
+        "Many events: P(A₁ ∩ … ∩ Aₙ) = P(A₁) ⋯ P(Aₙ)",
+    ], spacing=0.09)
+
+    ax = fig.add_subplot(gs[1, 0])
+    dice_grid(ax, lambda p: ORANGE if p == (6, 6) else BLUE if 6 in p else "#eef3fa",
+              "P(6,6) = 1/6 × 1/6 = 1/36")
+    legend_below(ax, [("1st is 6 or 2nd is 6", BLUE), ("both: 1 cell of 36", ORANGE)])
+
+    ax = fig.add_subplot(gs[1, 1])
+    n = np.arange(1, 11)
+    ax.semilogy(n, 0.5 ** n, "o-", color=BLUE, linewidth=2, markersize=6, label="all heads, (1/2)ⁿ")
+    ax.semilogy(n, (1 / 6) ** n, "o-", color=ORANGE, linewidth=2, markersize=6, label="all sixes, (1/6)ⁿ")
+    ax.annotate("5 heads: 1/32", (5, 0.5 ** 5), textcoords="offset points", xytext=(8, 8), fontsize=10.5)
+    ax.annotate(f"10 sixes: {(1 / 6) ** 10:.2e}", (10, (1 / 6) ** 10), textcoords="offset points",
+                xytext=(-8, 10), ha="right", fontsize=10.5)
+    ax.set_xticks(n)
+    ax.set_xlabel("number of independent flips / rolls")
+    ax.set_ylabel("probability (log scale)")
+    ax.grid(True, which="major")
+    ax.legend(loc="lower left", fontsize=10)
+    ax.set_title("Streaks shrink exponentially")
+
+    panel(fig.add_subplot(gs[1, 2]), "Three ways to P(6,6)", [
+        "`product rule   (1/6)²   0.027778`",
+        "`enumeration    1/36     0.027778`",
+        f"`simulated      500,000  {simulated_66:.6f}`",
+        "",
+        "No need to list 6¹⁰ outcomes:",
+        f"P(ten sixes) = (1/6)¹⁰ ≈ {(1 / 6) ** 10:.2e}",
+        "",
+        "Only for independent events. Dependent",
+        "events need P(B | A) (notebook 08).",
+    ], spacing=0.09)
+    save(fig, name="06_independence_product_rule.png")
+
+
+# ================================================================ notebook 08
+def sheet_08_conditional_probability():
+    rng = np.random.default_rng(seed=42)
+    dice = rng.integers(1, 7, size=(500_000, 2))
+    sums = dice.sum(axis=1)
+    first_is_6 = dice[:, 0] == 6
+    sim_given = (sums[first_is_6] == 10).mean()
+    sim_prior = (sums == 10).mean()
+    assert first_is_6.sum() == 83_194
+    assert (round(sim_given, 4), round(sim_prior, 4)) == (0.1677, 0.0833)
+    given = [sum(1 for a, b in TWO_DICE if a == k and a + b == 10) / 6 for k in range(1, 7)]
+    assert given[0] == 0 and given[5] == 1 / 6
+
+    fig = new_figure("Conditional probability: new information shrinks the sample space",
+                     "P(B | A) = (outcomes in both A and B) / (outcomes in A).  "
+                     "General product rule: P(A ∩ B) = P(A) · P(B | A).")
+    gs = grid(fig, top=0.84, bottom=0.1, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, 0])
+    cells = {"HH": (0, 1), "HT": (1, 1), "TH": (0, 0), "TT": (1, 0)}
+    for x0, keep_h in [(0, False), (3.2, True)]:
+        for o, (x, y) in cells.items():
+            gone = keep_h and o[0] == "T"
+            color = ORANGE if o == "HH" else BLUE_LIGHT
+            ax.add_patch(Rectangle((x0 + x, y), 0.92, 0.92, facecolor=color, alpha=0.18 if gone else 1.0,
+                                   linewidth=0))
+            ax.text(x0 + x + 0.46, y + 0.46, o, ha="center", va="center", fontsize=14,
+                    color="white" if o == "HH" else INK, alpha=0.35 if gone else 1.0, weight="bold")
+    ax.annotate("", xy=(3.05, 1.0), xytext=(2.05, 1.0), arrowprops=dict(arrowstyle="->", lw=2, color=INK2))
+    ax.text(2.55, 1.25, "1st is H", ha="center", fontsize=10, color=INK2)
+    ax.text(0.96, -0.3, "P(HH) = 1/4", ha="center", va="top", fontsize=12)
+    ax.text(4.16, -0.3, "P(HH | 1st H) = 1/2", ha="center", va="top", fontsize=12, color=ORANGE,
+            weight="bold")
+    ax.set_xlim(-0.1, 5.3)
+    ax.set_ylim(-0.9, 2.1)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title("Two coins: half the outcomes are ruled out", pad=8)
+
+    ax = fig.add_subplot(gs[0, 1])
+    dice_grid(ax, lambda p: ORANGE if sum(p) == 10 else BLUE_LIGHT,
+              "Given 1st = 6: only the bottom row remains", faded=lambda p: p[0] != 6, labels=True)
+    ax.add_patch(Rectangle((0, 0), 6, 1, fill=False, edgecolor=INK, linewidth=2.5, clip_on=False))
+
+    panel(fig.add_subplot(gs[0, 2]), "The definition", [
+        "P(B | A): probability of B given A happened.",
+        "Discard outcomes outside A, recount inside:",
+        "",
+        "P(sum 10) = 3/36 = 1/12",
+        "P(sum 10 | 1st 6) = 1/6   (went up)",
+        "P(sum 10 | 1st 1) = 0     (impossible)",
+        "",
+        "Independent events: P(B | A) = P(B),",
+        "the condition changes nothing.",
+    ], spacing=0.09)
+
+    ax = fig.add_subplot(gs[1, 0])
+    bars(ax, [f"1st = {k}" for k in range(1, 7)], given, "P(sum 10 | first die)", "condition",
+         ylim=0.25, label_fmt=lambda v: frac_label(v, 6), highlight=5)
+    ax.axhline(1 / 12, color=INK2, linestyle=":", linewidth=1.5, zorder=3)
+    ax.text(-0.35, 1 / 12 + 0.006, "no information: 1/12", fontsize=10, color=INK2)
+
+    grouped_bars(fig.add_subplot(gs[1, 1]), ["P(sum 10)", "P(sum 10 | 1st 6)"],
+                 [("theory", [1 / 12, 1 / 6], BLUE_LIGHT), ("simulated", [sim_prior, sim_given], BLUE)],
+                 "Simulation: condition = filter the trials", "", ylim=0.25,
+                 label_fmt=lambda v: f"{v:.4f}")
+    plt.gca().text(0.98, 0.97, f"500,000 rolls, {first_is_6.sum():,} kept", transform=plt.gca().transAxes,
+                   ha="right", va="top", fontsize=10, color=INK2)
+
+    panel(fig.add_subplot(gs[1, 2]), "General product rule", [
+        "P(A ∩ B) = P(A) · P(B | A)   (always)",
+        "",
+        "P(1st 6 ∩ sum 10) = 6/36 × 1/6 = 1/36,",
+        "matching the single cell (6, 4).",
+        "",
+        "Two aces without replacement:",
+        f"4/52 × 3/51 = {4 / 52 * 3 / 51:.5f}",
+        "",
+        "Independence is the special case",
+        "P(B | A) = P(B).",
+    ], spacing=0.085)
+    save(fig, name="08_conditional_probability.png")
+
+
+# ================================================================ notebook 13
+def sheet_13_prior_event_posterior():
+    examples = [
+        ("spam email", "contains \"lottery\"", 0.2, 14 / 24, "0.2", "14/24 ≈ 0.583"),
+        ("disease test", "tested positive", 0.0001, 99 / 10_098, "0.0001", "≈ 0.0098"),
+        ("dice sum = 10", "1st die is 6", 3 / 36, 1 / 6, "3/36", "1/6"),
+        ("two heads", "1st coin is H", 1 / 4, 1 / 2, "1/4", "1/2"),
+    ]
+    assert abs(bayes(0.2, 0.7, 0.125) - 14 / 24) < 1e-12
+    assert abs(bayes(0.0001, 0.99, 0.01) - 99 / 10_098) < 1e-12
+
+    fig = new_figure("Prior → event → posterior: one pattern behind every update",
+                     "The posterior P(A | E) is the prior P(A) recomputed in the smaller world the event E leaves.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, :2])
+    pos = ax.get_position()
+    ax.set_position([pos.x0 + 0.06, pos.y0, pos.width - 0.06, pos.height])
+    for row, (name, event, prior, posterior, prior_text, post_text) in enumerate(examples):
+        y = len(examples) - 1 - row
+        ax.annotate("", xy=(posterior, y), xytext=(prior, y),
+                    arrowprops=dict(arrowstyle="-|>", lw=2, color=MUTED, shrinkA=7, shrinkB=7))
+        ax.plot(prior, y, "o", color=BLUE_LIGHT, markersize=13, zorder=3)
+        ax.plot(posterior, y, "o", color=ORANGE, markersize=13, zorder=3)
+        ax.text(prior, y - 0.3, prior_text, ha="right" if prior > 0.05 else "center", va="top",
+                fontsize=10.5, color=INK2)
+        ax.text(posterior, y - 0.3, post_text, ha="left" if prior > 0.05 else "center", va="top",
+                fontsize=10.5, color=ORANGE, weight="bold")
+        ax.text(np.sqrt(prior * posterior), y + 0.16, f"{event}  (× {posterior / prior:.0f})",
+                ha="center", va="bottom", fontsize=10.5, color=INK)
+    ax.set_yticks(range(len(examples)), [e[0] for e in examples][::-1])
+    ax.set_xscale("log")
+    ax.set_xlim(3e-5, 1.5)
+    ax.set_ylim(-0.75, len(examples) - 0.4)
+    ax.tick_params(axis="y", length=0, labelsize=11.5)
+    ax.set_xlabel("probability (log scale)")
+    ax.grid(axis="x", which="major")
+    ax.set_title("Four examples: prior (light blue) → posterior (orange)")
+
+    panel(fig.add_subplot(gs[0, 2]), "The three parts", [
+        "Prior P(A): the probability before",
+        "    knowing anything else.",
+        "Event E: information arrives.",
+        "Posterior P(A | E): recomputed",
+        "    using that information.",
+        "",
+        "P(A)   →  event E  →   P(A | E)",
+        "",
+        "Same ratio, smaller world.",
+    ], spacing=0.09)
+
+    ax = fig.add_subplot(gs[1, 0])
+    dice_grid(ax, lambda p: ORANGE if sum(p) == 10 else BLUE_LIGHT, "Same event, two different conditions",
+              faded=lambda p: p[0] not in (3, 6))
+    for row in (3, 6):
+        ax.add_patch(Rectangle((0, 6 - row), 6, 1, fill=False, edgecolor=INK, linewidth=2.2, clip_on=False))
+    ax.text(6.15, 0.5, "1st = 6: 1/6", va="center", fontsize=10.5, color=ORANGE, weight="bold",
+            clip_on=False)
+    ax.text(6.15, 3.5, "1st = 3: 0", va="center", fontsize=10.5, color=INK2, weight="bold", clip_on=False)
+
+    bars(fig.add_subplot(gs[1, 1]), ["prior\nP(sum 10)", "given\n1st = 6", "given\n1st = 3"],
+         [3 / 36, 1 / 6, 0.0], "The posterior can go up or down", "", ylim=0.22,
+         label_fmt=lambda v: frac_label(v, 36), highlight=1)
+    plt.gca().text(2, 0.008, "0", ha="center", fontsize=10, color=INK)
+
+    panel(fig.add_subplot(gs[1, 2]), "Reading the update", [
+        "Spam: 20/100 of all emails, then",
+        "14/24 of the emails with \"lottery\".",
+        "",
+        "Up: spam, the test, 1st die 6, 1st coin H.",
+        "Down: 1st die 3 makes sum 10 impossible;",
+        "a reply to your own email lowers P(spam).",
+        "",
+        "Either way, the posterior is the better-",
+        "informed estimate.",
+    ], spacing=0.09)
+    save(fig, name="13_prior_event_posterior.png")
+
+
 # ================================================================ notebook 05
 def sheet_05_inclusion_exclusion():
     kids, soccer, basketball, both = 10, 6, 5, 3
@@ -663,10 +1261,17 @@ def sheet_10_bayes_disease_test():
 
 
 if __name__ == "__main__":
+    sheet_01_what_is_probability()
+    sheet_02_dice_example()
+    sheet_03_complement_rule()
+    sheet_04_sum_rule_disjoint()
     sheet_05_inclusion_exclusion()
+    sheet_06_independence_product_rule()
     sheet_07_birthday_problem()
+    sheet_08_conditional_probability()
     sheet_09_probability_tree()
     sheet_10_bayes_disease_test()
     sheet_11_bayes_formula()
     sheet_12_bayes_spam()
+    sheet_13_prior_event_posterior()
     sheet_14_naive_bayes()

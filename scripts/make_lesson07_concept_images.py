@@ -641,6 +641,356 @@ def sheet_06_power():
     save(fig, name="06_power.png")
 
 
+# ================================================================ notebook 07
+def sheet_07_steps():
+    se = SE_HEIGHTS
+    p_heights = p_value_heights(X_OBS, "right")
+    coffee = np.array([249.1, 246.0, 250.3, 245.7, 248.9, 247.2, 251.0, 244.8,
+                       249.6, 246.5, 248.0, 247.3, 250.1, 245.9, 246.8, 247.6])
+    z_coffee = (coffee.mean() - 250.0) / (4.0 / sqrt(len(coffee)))
+    p_coffee = 2 * (1 - Phi(abs(z_coffee)))
+    assert round(p_heights, 4) == 0.0332 and round(coffee.mean(), 3) == 247.8
+    assert round(z_coffee, 3) == -2.2 and round(p_coffee, 4) == 0.0278
+
+    rng = np.random.default_rng(77)          # the notebook's seed and draw order
+    n_sims = 100_000
+    upper = np.vectorize(lambda z: 1 - Phi(z))
+    p_h0 = upper((rng.normal(MU0, se, n_sims) - MU0) / se)
+    p_h1 = upper((rng.normal(68.0, se, n_sims) - MU0) / se)
+    keep_h0, keep_h1 = (p_h0 >= 0.05).mean(), (p_h1 >= 0.05).mean()
+    assert f"{keep_h0:.1%}" == "95.0%" and f"{keep_h1:.1%}" == "60.5%"
+
+    def beta68(alpha, n):
+        se_n = SIGMA / sqrt(n)
+        return Phi((MU0 + z_score(1 - alpha) * se_n - 68.0) / se_n)
+
+    n_needed = 10
+    while beta68(0.001, n_needed) > 0.10:
+        n_needed += 1
+    assert round(beta68(0.05, 10), 3) == 0.608 and round(beta68(0.001, 10), 3) == 0.957
+    assert n_needed == 102
+
+    lik_h0 = normal_pdf(X_OBS, MU0, se)
+    lik_h1 = normal_pdf(X_OBS, 68.0, se)
+
+    def posterior(prior_h0):
+        return lik_h0 * prior_h0 / (lik_h0 * prior_h0 + lik_h1 * (1 - prior_h0))
+
+    assert round(posterior(0.5), 3) == 0.171
+
+    fig = new_figure("Four steps to a verdict, and two ways to misread it",
+                     "State → design → compute → decide.  Then read it honestly: p is not P(H₀ true), "
+                     "and 'fail to reject' is not 'H₀ is true'.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    from matplotlib.patches import FancyBboxPatch
+    ax = fig.add_subplot(gs[0, :2])
+    ax.axis("off")
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 1)
+    steps = [("1. STATE", ["H₀: μ = 66.7", "H₁: μ > 66.7"], ["H₀: μ = 250", "H₁: μ ≠ 250"]),
+             ("2. DESIGN", ["statistic X̄, α = 0.05", "σ = 3, n = 10"],
+              ["statistic X̄, α = 0.05", "σ = 4, n = 16"]),
+             ("3. COMPUTE", [f"x̄ = {X_OBS}", f"z = {(X_OBS - MU0) / se:.3f}"],
+              [f"x̄ = {coffee.mean():.1f}", f"z = {z_coffee:.1f}"]),
+             ("4. DECIDE", [f"p = {p_heights:.4f} < 0.05", "reject: taller"],
+              [f"p = {p_coffee:.4f} < 0.05", "reject: drifted"])]
+    for k, (head, heights_lines, coffee_lines) in enumerate(steps):
+        x0 = k + 0.04
+        ax.add_patch(FancyBboxPatch((x0, 0.02), 0.84, 0.86, boxstyle="round,pad=0.0,rounding_size=0.03",
+                                    facecolor="#eaf2fc", edgecolor=BLUE, linewidth=1.4))
+        ax.text(x0 + 0.42, 0.80, head, ha="center", va="center", fontsize=13, weight="bold",
+                color=BLUE)
+        ax.text(x0 + 0.42, 0.68, "heights", ha="center", fontsize=9.5, color=MUTED, style="italic")
+        for j, line in enumerate(heights_lines):
+            ax.text(x0 + 0.42, 0.60 - 0.085 * j, line, ha="center", va="center", fontsize=11)
+        ax.text(x0 + 0.42, 0.33, "coffee machine", ha="center", fontsize=9.5, color=MUTED,
+                style="italic")
+        for j, line in enumerate(coffee_lines):
+            ax.text(x0 + 0.42, 0.25 - 0.085 * j, line, ha="center", va="center", fontsize=11)
+        if k < 3:
+            ax.annotate("", xy=(k + 1.03, 0.45), xytext=(k + 0.89, 0.45),
+                        arrowprops=dict(arrowstyle="-|>", color=INK2, lw=1.6))
+    ax.text(2.0, 0.97, "Steps 1-2 are fixed before any data is seen", ha="center", va="center",
+            fontsize=13, weight="bold")
+
+    panel(fig.add_subplot(gs[0, 2]), "The error facts, kept fresh", [
+        "Type I: reject H₀ although it is true.",
+        "Type II: keep H₀ although H₁ is true.",
+        "α = the maximum Type I probability.",
+        "",
+        "Entanglement at fixed n = 10, μ = 68:",
+        f"α = 0.05   → β = {beta68(0.05, 10):.1%}",
+        f"α = 0.001 → β = {beta68(0.001, 10):.1%}",
+        f"α = 0.001 with β ≤ 10% needs n = {n_needed}.",
+    ], spacing=0.088)
+
+    ax = fig.add_subplot(gs[1, 0])
+    bins = np.linspace(0, 1, 41)
+    ax.hist(p_h0, bins=bins, density=True, color=BLUE, alpha=0.55,
+            label=f"H₀ true (μ = 66.7): keep {keep_h0:.1%}")
+    ax.hist(p_h1, bins=bins, density=True, color=ORANGE, alpha=0.55,
+            label=f"H₀ false (μ = 68): keep {keep_h1:.1%}")
+    ax.axvline(0.05, color=INK, linestyle="--", linewidth=1.3)
+    ax.text(0.07, 10.6, "← reject", fontsize=10, color=INK2)
+    ax.set_ylim(0, 15)
+    ax.set_xlabel("p-value (100,000 simulated studies each)")
+    ax.set_ylabel("density")
+    ax.legend(loc="upper right", fontsize=9)
+    ax.grid(True)
+    ax.set_title("Both worlds land in 'fail to reject'")
+
+    ax = fig.add_subplot(gs[1, 1])
+    priors = np.linspace(0.01, 0.99, 300)
+    ax.plot(priors, posterior(priors), color=BLUE, linewidth=2.2,
+            label="P(H₀ | x̄ = 68.442), H₀: μ = 66.7 vs μ = 68")
+    ax.axhline(p_heights, color=ORANGE, linewidth=2, linestyle="--",
+               label=f"p-value = {p_heights:.4f} (needs no prior)")
+    ax.plot(0.5, posterior(0.5), "o", color=BLUE, markersize=8, zorder=3)
+    ax.annotate(f"50/50 prior: {posterior(0.5):.3f}", (0.5, posterior(0.5)),
+                textcoords="offset points", xytext=(10, -16), fontsize=10)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1.1)
+    ax.set_xlabel("prior probability of H₀")
+    ax.set_ylabel("probability")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True)
+    ax.set_title("p is not the probability H₀ is true")
+
+    panel(fig.add_subplot(gs[1, 2]), "Sentence repair", [
+        "✗  'p = 0.03: a 3% chance H₀ is true.'",
+        "✓  'Under H₀, data this extreme turn",
+        "     up only 3% of the time.'",
+        "",
+        "✗  'p = 0.4, so the machine is fine.'",
+        "✓  'Not enough evidence it drifted.'",
+        "",
+        "✗  'We accept H₀.'",
+        "✓  'We fail to reject H₀.'",
+        "",
+        "A non-rejection persuades only when",
+        "the test had high power.",
+    ], spacing=0.075)
+    save(fig, name="07_steps_and_interpretation.png")
+
+
+# ================================================================ notebook 08
+def sheet_08_t_statistic():
+    n = len(HEIGHTS)
+    x_bar, s = HEIGHTS.mean(), HEIGHTS.std(ddof=1)
+    t_obs = (x_bar - MU0) / (s / sqrt(n))
+    z_obs = (x_bar - MU0) / SE_HEIGHTS
+    t_crit, z_crit = t_score(0.95, n - 1), z_score(0.95)
+    p_t, p_wrong = t_tail(t_obs, n - 1), 1 - Phi(t_obs)
+    assert round(s, 3) == 3.113 and round(t_obs, 3) == 1.770 and round(z_obs, 3) == 1.836
+    assert round(t_crit, 3) == 1.833 and round(p_t, 4) == 0.0553 and round(p_wrong, 4) == 0.0384
+
+    rng = np.random.default_rng(88)          # the notebook's seed and draw order
+    samples = rng.normal(MU0, SIGMA, size=(60_000, n))
+    t_stats = (samples.mean(axis=1) - MU0) / (samples.std(axis=1, ddof=1) / sqrt(n))
+    beyond3 = np.mean(np.abs(t_stats) > 3)
+    assert round(beyond3, 4) == 0.0141
+    realized = {}
+    for n_ in (5, 10, 30):
+        sims = rng.normal(0, 1, size=(100_000, n_))
+        ts = sims.mean(axis=1) / (sims.std(axis=1, ddof=1) / sqrt(n_))
+        realized[n_] = (ts > 1.645).mean()
+    assert [f"{v:.1%}" for v in realized.values()] == ["8.7%", "6.7%", "5.5%"]
+
+    fig = new_figure("The t-statistic: swap σ for s, and pay for it in the tails",
+                     "T = (X̄ − μ) / (S/√n) follows Student's t with ν = n − 1 degrees of freedom: "
+                     "heavier tails than N(0, 1), Gaussian-like by ν ≈ 30.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    t_axis = np.linspace(-5, 5, 600)
+    ax = fig.add_subplot(gs[0, 0])
+    ax.plot(t_axis, normal_pdf(t_axis), color=INK, linewidth=2.4, label="N(0, 1)")
+    for df, color in [(1, ORANGE), (5, "#f2a07c"), (9, AQUA), (30, BLUE)]:
+        ax.plot(t_axis, t_pdf(t_axis, df), color=color, linewidth=1.6, label=f"t, ν = {df}")
+    ax.set_ylim(0, 0.5)
+    ax.set_xlabel("t")
+    ax.set_ylabel("density")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True)
+    ax.set_title("One parameter: ν = n − 1")
+
+    ax = fig.add_subplot(gs[0, 1])
+    ax.hist(t_stats, bins=160, range=(-5, 5), density=True, color=BLUE_LIGHT, edgecolor="none",
+            label="60,000 simulated T, n = 10")
+    ax.plot(t_axis, t_pdf(t_axis, n - 1), color=AQUA, linewidth=2, label="t, ν = 9")
+    ax.plot(t_axis, normal_pdf(t_axis), color=INK, linewidth=1.4, linestyle="--", label="N(0, 1)")
+    ax.set_ylim(0, 0.5)
+    ax.set_xlabel("t")
+    ax.set_ylabel("density")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True)
+    ax.set_title("Simulated T follows t₉, not the normal")
+    ax.text(4.9, 0.30, f"P(|T| > 3)\nsimulated  {beyond3:.4f}\nt₉            {2 * t_tail(3, 9):.4f}"
+            f"\nnormal      {2 * (1 - Phi(3)):.4f}", ha="right", va="top", fontsize=9.5, color=INK2)
+
+    panel(fig.add_subplot(gs[0, 2]), "What changed from z", [
+        r"$Z = \dfrac{\bar{X} - \mu}{\sigma/\sqrt{n}} \sim N(0,1)$   (σ known)",
+        "",
+        "",
+        r"$T = \dfrac{\bar{X} - \mu}{S/\sqrt{n}} \sim t_{n-1}$   (σ unknown)",
+        "",
+        "",
+        r"$S = \sqrt{\frac{1}{n-1}\sum (X_i - \bar{X})^2}$",
+        "",
+        "",
+        "S is random too: samples that underestimate",
+        "σ inflate T, hence the heavier tails.",
+        "ν depends on n only, never on μ or σ.",
+    ], spacing=0.08)
+
+    ax = fig.add_subplot(gs[1, 0])
+    ax.plot(t_axis, t_pdf(t_axis, 9), color=INK2, linewidth=1.8)
+    ax.fill_between(t_axis, t_pdf(t_axis, 9), where=t_axis >= t_crit, color=ORANGE, alpha=0.8,
+                    linewidth=0, label=f"reject: t > t₀.₉₅,₉ = {t_crit:.3f}")
+    ax.axvline(z_crit, color=MUTED, linestyle="--", linewidth=1.4,
+               label=f"z bar {z_crit:.3f} (too lenient)")
+    ax.axvline(t_obs, color=BLUE, linewidth=2.2, label=f"observed t = {t_obs:.3f}")
+    ax.set_xlim(-4.5, 4.5)
+    ax.set_ylim(0, 0.6)
+    ax.set_xlabel("t")
+    ax.set_ylabel("density under H₀: t₉")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True)
+    ax.set_title(f"Heights: p = {p_t:.4f}, fail to reject")
+
+    bars(fig.add_subplot(gs[1, 1]), ["n = 5", "n = 10", "n = 30"], list(realized.values()),
+         "z cutoff on a t statistic inflates α", "sample size", ylabel="actual Type I rate",
+         ylim=0.11, label_fmt=lambda v: f"{v:.1%}", highlight=0)
+    ax = fig.axes[-1]
+    ax.axhline(0.05, color=INK, linestyle=":", linewidth=1.3, label="intended α = 5%")
+    ax.legend(loc="upper right", fontsize=9.5)
+
+    panel(fig.add_subplot(gs[1, 2]), "The heights, both ways", [
+        f"x̄ = {x_bar:.3f},  s = {s:.3f},  ν = {n - 1}",
+        f"t = 1.742 / ({s:.3f}/√10) = {t_obs:.3f}",
+        f"z = 1.742 / (3/√10) = {z_obs:.3f}",
+        "",
+        "Nearly the same number; the curve differs:",
+        f"t₉ tail: p = {p_t:.4f} ≥ 0.05 → keep H₀",
+        f"normal tail would claim p = {p_wrong:.4f}",
+        "",
+        "Match the curve to the statistic.",
+    ], spacing=0.085)
+    save(fig, name="08_t_statistic.png")
+
+
+# ================================================================ notebook 09
+def sheet_09_t_tests():
+    n = len(HEIGHTS)
+    s = HEIGHTS.std(ddof=1)
+    se_t = s / sqrt(n)
+    t_r = (HEIGHTS.mean() - MU0) / se_t
+    t_l = (X_OBS_LEFT - MU0) / se_t
+    p_r, p_2, p_l = t_tail(t_r, n - 1), 2 * t_tail(abs(t_r), n - 1), 1 - t_tail(t_l, n - 1)
+    assert (round(t_r, 3), round(t_l, 3)) == (1.770, -2.487)
+    assert (round(p_r, 4), round(p_2, 4), round(p_l, 4)) == (0.0553, 0.1106, 0.0173)
+    z_world = [p_value_heights(X_OBS, "right"), p_value_heights(X_OBS, "two"),
+               p_value_heights(X_OBS_LEFT, "left")]
+    t_world = [p_r, p_2, p_l]
+
+    t_crit = 1.8331
+    s_star = (X_OBS - MU0) * sqrt(n) / t_crit
+    t30 = (HEIGHTS.mean() - MU0) / (s / sqrt(30))
+    p30 = t_tail(t30, 29)
+    assert round(s_star, 3) == 3.005 and round(t30, 3) == 3.065 and round(p30, 4) == 0.0023
+
+    rng = np.random.default_rng(99)          # the notebook's seed and draw order
+    true_samples = rng.normal(68.4, 3.0, size=(100_000, 10))
+    xbars, svals = true_samples.mean(axis=1), true_samples.std(axis=1, ddof=1)
+    power_z = ((xbars - MU0) / (3.0 / sqrt(10)) > z_score(0.95)).mean()
+    power_t = ((xbars - MU0) / (svals / sqrt(10)) > t_crit).mean()
+    assert f"{power_z:.1%}" == "55.8%" and f"{power_t:.1%}" == "50.4%"
+
+    fig = new_figure("Three t-tests: same data, honest σ, and one verdict flips",
+                     f"σ unknown → T = (X̄ − 66.7)/(s/√10) ~ t₉ under H₀, with s = {s:.3f}.  "
+                     "Every curve now sits around 0, and every p-value grows.")
+    gs = grid(fig, top=0.84, wspace=0.3)
+
+    sub = gs[0, :2].subgridspec(1, 3, wspace=0.12)
+    t_axis = np.linspace(-4.5, 4.5, 700)
+    dens = t_pdf(t_axis, n - 1)
+    cases = [(f"Right-tailed, t = {t_r:.2f}", t_axis >= t_r, [t_r], p_r, "don't reject"),
+             (f"Two-tailed, |t| = {t_r:.2f}", np.abs(t_axis) >= t_r, [t_r, -t_r], p_2,
+              "don't reject"),
+             (f"Left-tailed, t = {t_l:.2f}", t_axis <= t_l, [t_l], p_l, "reject")]
+    for k, (title, region, marks, p, verdict) in enumerate(cases):
+        ax = fig.add_subplot(sub[0, k])
+        tail_plot(ax, t_axis, dens, region)
+        for m in marks:
+            ax.axvline(m, color=ORANGE, linewidth=1.5)
+        ax.axvline(0, color=INK2, linestyle=":", linewidth=1)
+        ax.text(0, 0.49, f"p = {p:.4f}", ha="center", fontsize=12, weight="bold",
+                color=ORANGE if p < 0.05 else INK2, zorder=4,
+                bbox=dict(facecolor=SURFACE, edgecolor="none", pad=1))
+        ax.text(0, 0.45, f"→ {verdict}", ha="center", fontsize=10.5, color=INK2, zorder=4,
+                bbox=dict(facecolor=SURFACE, edgecolor="none", pad=1))
+        ax.set_ylim(0, 0.54)
+        ax.set_yticks([] if k else [0, 0.2, 0.4])
+        ax.set_xlabel("t")
+        ax.set_title(title, fontsize=12)
+        if k == 0:
+            ax.set_ylabel("density under H₀: t₉")
+
+    panel(fig.add_subplot(gs[0, 2]), "The arithmetic", [
+        f"s/√n = {s:.3f}/√10 = {se_t:.3f}",
+        f"right:  t = 1.742 / {se_t:.3f} = {t_r:.3f}",
+        f"two:    p = 2 · P(T > |t|) = {p_2:.4f}",
+        f"left:   t = −2.448 / {se_t:.3f} = {t_l:.3f}",
+        "",
+        "Always take |t| for the two-tailed p:",
+        "t = −1.77 gives the same p as +1.77.",
+        "",
+        f"Left still rejects at 0.05, no longer at 0.01.",
+    ], spacing=0.088)
+
+    ax = fig.add_subplot(gs[1, 0])
+    grouped_bars(ax, ["right\nx̄ = 68.442", "two\nx̄ = 68.442", "left\nx̄ = 64.252"],
+                 [("z-world (σ = 3 known)", z_world, BLUE), ("t-world (s estimated)", t_world, ORANGE)],
+                 "Every p grows; one verdict flips", "", ylim=0.14,
+                 label_fmt=lambda v: f"{v:.4f}")
+    ax.set_ylabel("p-value")
+    ax.axhline(0.05, color=INK, linestyle=":", linewidth=1.3)
+    ax.text(2.45, 0.052, "α = 0.05", ha="right", va="bottom", fontsize=9.5, color=INK2)
+    ax.text(0, 0.075, "FLIP", ha="center", fontsize=11, weight="bold", color=ORANGE)
+
+    ax = fig.add_subplot(gs[1, 1])
+    z_r = (X_OBS - MU0) / SE_HEIGHTS
+    norm = normal_pdf(t_axis)
+    ax.plot(t_axis, norm, color=BLUE, linewidth=1.8,
+            label=f"z-world: N(0,1), z = {z_r:.3f}, p = {z_world[0]:.4f}")
+    ax.plot(t_axis, dens, color=ORANGE, linewidth=1.8,
+            label=f"t-world: t₉, t = {t_r:.3f}, p = {p_r:.4f}")
+    ax.fill_between(t_axis, norm, where=t_axis >= z_r, color=BLUE, alpha=0.35, linewidth=0)
+    ax.fill_between(t_axis, dens, where=t_axis >= t_r, color=ORANGE, alpha=0.35, linewidth=0)
+    ax.axvline(z_r, color=BLUE, linestyle="--", linewidth=1.2)
+    ax.axvline(t_r, color=ORANGE, linestyle="--", linewidth=1.2)
+    ax.set_xlim(-4, 4.5)
+    ax.set_ylim(0, 0.55)
+    ax.set_xlabel("standardized statistic")
+    ax.set_ylabel("density under H₀")
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True)
+    ax.set_title("Same evidence, fatter tail, opposite verdict")
+
+    panel(fig.add_subplot(gs[1, 2]), "What would have saved it?", [
+        f"A tighter sample: s ≤ {s_star:.3f}, i.e. the",
+        "z-world's σ = 3 sat right on the edge.",
+        "",
+        f"More data: same x̄ and s at n = 30 gives",
+        f"t = {t30:.3f} on t₂₉, p = {p30:.4f}.",
+        "",
+        f"Power against μ = 68.4 at n = 10:",
+        f"z-test {power_z:.1%},  t-test {power_t:.1%}",
+        f"→ honesty costs {power_z - power_t:.1%} of power.",
+    ], spacing=0.085)
+    save(fig, name="09_t_tests.png")
+
+
 # ================================================================ notebook 10
 def sheet_10_two_sample():
     us = HEIGHTS
@@ -962,6 +1312,9 @@ if __name__ == "__main__":
     sheet_04_p_values()
     sheet_05_critical_values()
     sheet_06_power()
+    sheet_07_steps()
+    sheet_08_t_statistic()
+    sheet_09_t_tests()
     sheet_10_two_sample()
     sheet_11_paired()
     sheet_12_ab_testing()
