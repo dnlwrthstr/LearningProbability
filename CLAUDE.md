@@ -10,7 +10,7 @@ A personal learning project for probability. The primary workflow is transcribin
 
 - `coursera/00_introduction_to_probability/` — notebooks for the Coursera course, one numbered directory per course/module.
 - `GUIDELINES.md` — the authoritative spec for how every notebook must be written. Read it before creating or editing a notebook.
-- `scripts/` — matplotlib generators for the images embedded in notebooks (`make_lesson00_concept_images.py`, `make_lesson02_concept_images.py`, `make_lesson03_solution_images.py`, `make_lesson04_concept_images.py`, `make_lesson05_concept_images.py`, `make_lesson06_concept_images.py`), sharing one look via `viz_style.py`. Each script computes every number from the notebook's own data and writes into that lesson's `img/` folder. Run with the Anaconda Python, e.g. `/opt/anaconda3/bin/python scripts/make_lesson00_concept_images.py`.
+- `scripts/` — matplotlib generators for the images embedded in notebooks (`make_lesson00_concept_images.py`, `make_lesson01_concept_images.py`, `make_lesson02_concept_images.py`, `make_lesson03_solution_images.py`, `make_lesson04_concept_images.py`, `make_lesson05_concept_images.py`, `make_lesson06_concept_images.py`, `make_lesson07_concept_images.py`), sharing one look via `viz_style.py`. Each script computes every number from the notebook's own data and writes into that lesson's `img/` folder. Run with the Anaconda Python, e.g. `/opt/anaconda3/bin/python scripts/make_lesson00_concept_images.py`.
 
 ## Creating notebooks
 
